@@ -146,6 +146,9 @@ def main():
         print("NEGATIVE",json.dumps(outcome,ensure_ascii=False),flush=True)
     problems=[x for x in results if x["status"] in ("ERROR","DEGRADED")]+[x for x in neg if x["status"]!="PASS"]
     print("SUMMARY",json.dumps({"tested":len(results),"successful":sum(x["status"]=="PASS" for x in results),"degraded":sum(x["status"]=="DEGRADED" for x in results),"errors":sum(x["status"]=="ERROR" for x in results),"negative_pass":sum(x["status"]=="PASS" for x in neg),"problems":problems},ensure_ascii=False),flush=True)
+    by_name={x["tool"]:x["status"] for x in results}
+    for mandatory in ("health_check","fetch_source","fetch_source/pdf","web_search/duckduckgo"):
+        assert by_name.get(mandatory)=="PASS",(mandatory,by_name.get(mandatory))
     assert all(x["status"]=="PASS" for x in neg),"Negative security regression!"
     assert not any(x["status"]=="ERROR" and x["tool"] in ("health_check","fetch_source","map_website","compare_evidence") for x in results),"Basic MCP tools failed!"
     assert any(x["status"]=="PASS" for x in results if x["tool"] not in ("health_check","code_search/tokenless")),"All providers failed!"
