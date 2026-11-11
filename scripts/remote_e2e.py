@@ -58,6 +58,12 @@ TASKS = [
  ("web_search/default", {"query":"African Union","limit":3}),
  ("social_search/reddit", {"query":"Africa geography","sources":["reddit"],"limit":1}),
  ("code_search/tokenless", {"query":"hello", "mode":"code", "limit":1}),
+ ("code_search/issues", {"query":"is:issue repo:python/cpython", "mode":"issues", "limit":2}),
+ ("code_search/users", {"query":"python", "mode":"users", "limit":1}),
+ ("academic_search/all", {"query":"African climate change", "limit":2}),
+ ("news_search/pt-BR", {"query":"África", "limit":1, "locale":"pt-BR"}),
+ ("social_search/default", {"query":"Python", "limit":2}),
+ ("web_search/bing", {"query":"African Union", "engines":["bing"], "limit":2}),
 ]
 NEGATIVE = [
  ("fetch_source/private", "fetch_source", {"url":"http://127.0.0.1/latest/meta-data"}),
@@ -79,7 +85,8 @@ def summarize(name,result,seconds):
     # Single-document tools do not return a results list. Check their actual fields.
     if name=="fetch_source": count=1 if data.get("text") and data.get("url") else 0
     if name=="citation_lookup": count=1 if data.get("doi") and data.get("title") else 0
-    if name=="health_check": count=1 if data.get("status")=="ok" else 0
+    if name=="health_check":
+        count=1 if data.get("status")=="ok" and data.get("providers",{}).get("web_default")==["bing","wikipedia"] else 0
     status="PASS" if count is None or count>0 else "DEGRADED"
     if data_errors and count==0: status="DEGRADED"
     if name=="code_search/tokenless" and data.get("error"):status="EXPECTED_LIMIT"
@@ -115,6 +122,16 @@ def main():
             result=task.result()
             results.append(result)
             print("TOOL",json.dumps(result,ensure_ascii=False),flush=True)
+    # The public endpoint must reject oversized JSON before parsing it.
+    too_large=json.dumps({"jsonrpc":"2.0","id":901,"method":"ping","params":{"padding":"x"*33000}}).encode()
+    request=urllib.request.Request(BASE,data=too_large,headers=HEADERS,method="POST")
+    try:
+        with urllib.request.urlopen(request,timeout=20) as response:
+            code=response.status
+    except urllib.error.HTTPError as error:
+        code=error.code
+    print("REQUEST_LIMIT",json.dumps({"oversized_status":code,"expected":413}),flush=True)
+    assert code==413,"POST max-size guard missing or not deployed"
     neg=[]
     for i,(name,method,args) in enumerate(NEGATIVE):
         start=time.monotonic()
