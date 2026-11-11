@@ -29,7 +29,7 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
-BASE_URL = "https://omni-host-sampling-mcp.onrender.com"
+BASE_URL = os.environ.get("OMNI_AGENT_PUBLIC_URL", "https://omni-host-sampling-mcp.onrender.com").rstrip("/")
 MCP_RESOURCE = BASE_URL + "/mcp"
 SCOPE = "mcp"
 PENDING_LIFETIME = 300
