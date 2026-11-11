@@ -1,104 +1,122 @@
 #!/usr/bin/env python3
-"""Cloud MCP entrypoint. Public, read-only and stateless.
-
-Never expose local file APIs or the shared SQLite notes database over this endpoint.
-"""
+"""Cloud MCP server: one unified search tool plus five read-only support tools."""
 import os
 import sys
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine as e
+import unified
 from request_limits import RateLimitedApp
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from mcp.server.transport_security import TransportSecuritySettings
 
-mcp=MCPServer('OmniResearch OSS', version='1.3.0', instructions='Research public sources and supply verifiable citations. Search output is not proof of accuracy.')
+mcp = MCPServer(
+    "OmniResearch OSS",
+    version="1.4.0",
+    instructions=(
+        "Use omni_research-deep for all public research discovery. "
+        "Choose mode=deep for six source categories or select a specific mode. "
+        "Fetch and independently verify sources before claiming facts. "
+        "A search bundle is not an autonomous subagent and does not synthesize evidence."
+    ),
+)
 
 def _bounds(v, low, high):
-    if isinstance(v,bool) or not isinstance(v,int):raise ValueError('Expected integer limit')
-    return min(high,max(low,v))
+    if isinstance(v, bool) or not isinstance(v, int):
+        raise ValueError("Expected integer limit")
+    return min(high, max(low, v))
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
-def web_search(query: str, engines: list[str] | None = None, limit: int = 12) -> dict:
-    """Search Wikimedia and Google News by default; optional web engines may block automated access."""
-    return e.web_search(query,engines,_bounds(limit,1,30))
+READ = ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False)
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
-def academic_search(query: str, sources: list[str] | None = None, limit: int = 8) -> dict:
-    """Find scientific works via OpenAlex, Crossref, arXiv and PubMed."""
-    return e.academic_search(query,sources,_bounds(limit,1,25))
+@mcp.tool(name="omni_research-deep", annotations=READ)
+def omni_research_deep(
+    query: str,
+    mode: str = "deep",
+    providers: list[str] | None = None,
+    limit: int = 16,
+    locale: str = "en-US",
+    code_mode: str = "repositories",
+    dataset_source: str = "both",
+    web_engines: list[str] | None = None,
+    academic_sources: list[str] | None = None,
+    social_sources: list[str] | None = None,
+) -> dict:
+    """Search across web, academia, code, communities, news and datasets with one call.
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
-def code_search(query: str, mode: str = 'repositories', limit: int = 10) -> dict:
-    """Search public GitHub repositories, issues, users, or indexed code when authorized."""
-    return e.code_search(query,mode,_bounds(limit,1,30))
+    Modes: deep (all categories), web, academic, code, social, news, datasets,
+    technical or trends. Optional providers filters the six categories.
+    Advanced filters preserve original per-provider search functionality.
+    Returns citations, provenance, source errors and bounded results.
+    This is concurrent source retrieval, not independent LLM agents.
+    """
+    return unified.research(
+        query=query,
+        mode=mode,
+        providers=providers,
+        limit=_bounds(limit, 1, 30),
+        locale=locale,
+        code_mode=code_mode,
+        dataset_source=dataset_source,
+        web_engines=web_engines,
+        academic_sources=academic_sources,
+        social_sources=social_sources,
+    )
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
-def social_search(query: str, sources: list[str] | None = None, limit: int = 8) -> dict:
-    """Search public Hacker News, Stack Overflow and Reddit discussions."""
-    return e.social_search(query,sources,_bounds(limit,1,30))
-
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
-def news_search(query: str, limit: int = 12, locale: str = 'en-US') -> dict:
-    """Search public news feeds; publisher timestamps require independent verification."""
-    return e.news_search(query,_bounds(limit,1,30),locale)
-
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
-def dataset_search(query: str, source: str = 'huggingface', limit: int = 10) -> dict:
-    """Discover public datasets on Hugging Face or Zenodo."""
-    return e.dataset_search(query,source,_bounds(limit,1,25))
-
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
+@mcp.tool(annotations=READ)
 def fetch_source(url: str, max_chars: int = 16000) -> dict:
-    """Fetch public HTTP(S) documents with URL restrictions and response size limits."""
-    return e.extract_url(url,_bounds(max_chars,100,60000))
+    """Fetch public HTTP(S) documents and PDFs with URL and size guards."""
+    return e.extract_url(url, _bounds(max_chars, 100, 60000))
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
+@mcp.tool(annotations=READ)
 def map_website(url: str, max_pages: int = 6) -> dict:
-    """Crawl a bounded number of pages on the same public host."""
-    return e.crawl_site(url,_bounds(max_pages,1,15))
+    """Crawl a bounded number of same-host public pages."""
+    return e.crawl_site(url, _bounds(max_pages, 1, 15))
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
+@mcp.tool(annotations=READ)
 def compare_evidence(claim: str, urls: list[str]) -> dict:
-    """Collect source passages relevant to a claim; no automatic truth verdict."""
-    return e.evidence_compare(claim,urls)
+    """Extract relevant passages from sources without certifying the claim."""
+    return e.evidence_compare(claim, urls)
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
-def research_bundle(topic: str, mode: str = 'general', max_results: int = 16) -> dict:
-    """Collect parallel evidence from multiple public providers with traceable citations."""
-    return e.deep_research(topic,mode,_bounds(max_results,1,30))
-
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
+@mcp.tool(annotations=READ)
 def citation_lookup(doi: str) -> dict:
-    """Resolve a DOI through Crossref and return bibliographic metadata."""
+    """Resolve a DOI via Crossref and return bibliographic metadata."""
     return e.citation_lookup(doi)
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False, destructive_hint=False))
 def health_check() -> dict:
-    """Report provider configuration and public API availability, not internal secrets."""
-    data=e.health()
-    # Prevent inadvertently displaying credentials, filesystem paths, user identifiers.
-    return {'status':'ok','mode':'cloud-public','public_tools':12,'providers':{
-        'web_default':['wikipedia','google-news'],
-        'web_optional':['duckduckgo','bing','mojeek','searxng'],
-        'social_default':['hackernews','stackoverflow'],
-        'social_optional':['reddit'],
-        'academic':['openalex','crossref','arxiv','pubmed'],
-        'code_search_token_configured':bool(data.get('github_token_configured')) if isinstance(data,dict) else False
-    },'notes':'External provider availability and rate limits vary; public HTTP MCP is unauthenticated and globally throttled.'}
+    """Return public capabilities and sanitized upstream availability metadata."""
+    return {
+        "status": "ok",
+        "mode": "cloud-public",
+        "version": "1.4.0",
+        "public_tools": 6,
+        "search_tool": "omni_research-deep",
+        "search_categories": list(unified.SEARCH_PROVIDERS),
+        "providers": {
+            "web_default": ["wikipedia", "google-news"],
+            "web_optional": ["duckduckgo", "bing", "mojeek", "searxng"],
+            "social_default": ["hackernews", "stackoverflow"],
+            "social_optional": ["reddit"],
+            "academic": ["openalex", "crossref", "arxiv", "pubmed"],
+            "code_search_token_configured": bool(os.getenv("GITHUB_TOKEN")),
+        },
+        "notes": (
+            "One search tool combines six source categories, not six autonomous agents. "
+            "Remote tools are unauthenticated and globally rate limited. "
+            "Public provider blocking and incomplete web coverage remain possible."
+        ),
+    }
 
-# DNS rebinding protection: allow only the deployed hostname, no wildcard domains.
-hostname=os.environ.get('RENDER_EXTERNAL_HOSTNAME','').strip().lower()
+hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip().lower()
 if not hostname:
-    raise RuntimeError('Set RENDER_EXTERNAL_HOSTNAME to deployed Render hostname before startup')
-security=TransportSecuritySettings(
-    allowed_hosts=[hostname,hostname+':*'],
-    allowed_origins=['https://chatgpt.com','https://chat.openai.com'],
+    raise RuntimeError("Set RENDER_EXTERNAL_HOSTNAME to deployed Render hostname before startup")
+security = TransportSecuritySettings(
+    allowed_hosts=[hostname, hostname + ":*"],
+    allowed_origins=["https://chatgpt.com", "https://chat.openai.com"],
 )
-app=mcp.streamable_http_app(stateless_http=True,json_response=True,transport_security=security)
+app = mcp.streamable_http_app(stateless_http=True, json_response=True, transport_security=security)
 from starlette.routing import Route
 from starlette.responses import JSONResponse
-app.router.routes.insert(0,Route('/healthz',lambda request: JSONResponse({'status':'ok'}),methods=['GET']))
-app=RateLimitedApp(app, requests_per_minute=120, concurrency=6, max_bytes=32768)
-
+app.router.routes.insert(0, Route("/healthz", lambda request: JSONResponse({"status": "ok"}), methods=["GET"]))
+app = RateLimitedApp(app, requests_per_minute=120, concurrency=6, max_bytes=32768)
