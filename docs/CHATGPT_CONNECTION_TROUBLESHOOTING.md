@@ -8,22 +8,41 @@ underlying app, while the plugin package itself was present. This means the
 skill is present but the remote MCP connection is not available to the chat.
 A model cannot invoke a tool that its host has not supplied.
 
-## First fix: install and authorize the MCP connection
+## Owner-approved OAuth 2.1 — fixed auth negotiation
 
-1. Open https://chatgpt.com/plugins/plugins_6af4bc3b0ce0819183dc94f669d0ba25
-   on ChatGPT **web** in the same account/workspace.
-2. Choose Install/Connect when available and complete the API-key/Bearer
-   authorization in the **plugin connection UI**, not in chat text.
-3. The token is the service's existing OMNI_AGENT_ACCESS_TOKEN from the
-   user-owned Render service. Do not paste it into chat, GitHub, skill files,
-   screenshots or public logs. The plugin does not store the token in its ZIP.
-4. Confirm that the server tools `agent`, `spawn_agent`, `task` were
-   discovered; if ChatGPT shows Refresh, refresh the tool list.
-5. Start a **new text conversation** with the connected plugin selected.
+**Previous blocker:** The remote app required a custom static `Authorization: Bearer`
+API key and returned 401 to every ChatGPT MCP discovery request, including
+OAuth well-known metadata. ChatGPT's hosted MCP integration cannot supply
+custom API keys. Its OAuth discovery attempts therefore all failed.
 
-The user must perform plugin installation/authorization; adding @ or merely
-creating a plugin release does not grant a live MCP connection. Plugin
-manifests, skills and server deployments cannot override this.
+The Host Sampling server now uses the official MCP Python SDK's
+OAuth 2.1 authorization server integration with:
+- RFC 9728 protected resource metadata, public OAuth metadata and DCR
+- PKCE S256 authorization-code flow
+- a small, owner-only HTTPS login page at /owner/approve
+- OAuth bearer access tokens on every /mcp request
+- strict chatgpt.com callback allowlisting, audience and scope validation
+- separate IP allowlist on /mcp, not the public OAuth metadata or consent page
+
+**To connect:**
+
+1. Open ChatGPT Plugins on the web and choose Add custom MCP server.
+2. Enter https://omni-host-sampling-mcp.onrender.com/mcp.
+3. Select **OAuth**, not API key and not No Authentication.
+4. Select **Dynamic Client Registration (DCR)** when offered.
+5. When the login page opens at the HTTPS Render domain, enter the
+   original OMNI_AGENT_ACCESS_TOKEN in the hosted login form
+   (NOT in ChatGPT text). This step approves ChatGPT to use the MCP server.
+6. Complete Create as plugin and Install; then select the connected MCP
+   plugin in a fresh conversation and inspect tools/list.
+
+The login uses the existing server-side owner key only to verify consent.
+The key is not given to ChatGPT; ChatGPT obtains a distinct OAuth token.
+
+This is a **single-owner experimental authorization server** with
+in-memory client registrations and tokens. A restart of Render Free may
+invalidate an existing connection, requiring a new OAuth authorization.
+For production multi-user use a durable identity provider and token store.
 
 ## Second fix: ingress allowlist
 

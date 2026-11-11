@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - 'server/host_sampling_*.py'
+      - 'server/owner_oauth.py'
+      - 'tests/test_owner_oauth.py'
+      - 'scripts/host_sampling_oauth_smoke.py'
       - 'server/inbound_ip_filter.py'
       - 'tests/test_inbound_ip_filter.py'
       - 'tests/test_openai_egress_allowlist.py'
@@ -14,6 +17,9 @@ on:
     branches: [main]
     paths:
       - 'server/host_sampling_*.py'
+      - 'server/owner_oauth.py'
+      - 'tests/test_owner_oauth.py'
+      - 'scripts/host_sampling_oauth_smoke.py'
       - 'server/inbound_ip_filter.py'
       - 'tests/test_inbound_ip_filter.py'
       - 'tests/test_openai_egress_allowlist.py'
@@ -34,10 +40,11 @@ jobs:
         run: pip install -r requirements-cloud.txt
       - name: Check code and run tests without any model credential
         run: |
-          python -m compileall -q server/host_sampling_core.py server/host_sampling_cloud.py server/inbound_ip_filter.py
+          python -m compileall -q server/host_sampling_core.py server/host_sampling_cloud.py server/inbound_ip_filter.py server/owner_oauth.py scripts/host_sampling_oauth_smoke.py
           python -m unittest discover -s tests -p 'test_inbound_ip_filter.py' -v
           python -m unittest discover -s tests -p 'test_openai_egress_allowlist.py' -v
           python -m unittest discover -s tests -p 'test_host_sampling_core.py' -v
+          python -m unittest discover -s tests -p 'test_owner_oauth.py' -v
       - name: Verify official ChatGPT egress feed format
         run: |
           python - <<'PY'
@@ -54,10 +61,11 @@ jobs:
           OMNI_AGENT_ACCESS_TOKEN: 'mock-local-only-test-token-longer-than-thirty-two-characters'
         run: |
           python -c "from server.host_sampling_cloud import mcp, app; print(mcp.name)"
-      - name: Verify real authenticated MCP messages and unsupported sampling behavior
+      - name: Verify OAuth 2.1 DCR + PKCE owner-approved MCP end-to-end
         env:
           RENDER_EXTERNAL_HOSTNAME: localhost
           OMNI_AGENT_ACCESS_TOKEN: 'mock-local-only-test-token-longer-than-thirty-two-characters'
+          OMNI_AGENT_PUBLIC_URL: http://localhost:8798
         run: |
           set -euo pipefail
           python -m uvicorn server.host_sampling_cloud:app --host 127.0.0.1 --port 8798 > /tmp/host-sampling.log 2>&1 &
@@ -67,4 +75,4 @@ jobs:
             if curl -fsS http://127.0.0.1:8798/healthz >/dev/null; then break; fi
             sleep .2
           done
-          python scripts/host_sampling_smoke.py
+          python scripts/host_sampling_oauth_smoke.py

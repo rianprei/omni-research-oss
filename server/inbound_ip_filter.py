@@ -108,7 +108,10 @@ class IngressAllowlist:
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
             return await self.app(scope, receive, send)
-        if scope.get("path") == "/healthz" and scope.get("method") in ("GET", "HEAD"):
+        # Protect MCP tool traffic, but never block OAuth discovery, registration,
+        # token exchange, or the human owner's HTTPS approval page by source IP.
+        # MCP access tokens are verified independently by the SDK auth middleware.
+        if scope.get("path") != "/mcp":
             return await self.app(scope, receive, send)
 
         headers = {}
