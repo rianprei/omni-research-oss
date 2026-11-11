@@ -8,14 +8,20 @@ Cloudflare overwrites CF-Connecting-IP on its origin connections.
 from __future__ import annotations
 
 import ipaddress
+import os
 from collections.abc import Iterable
 
 HOST_SAMPLING_ALLOWED_CIDRS = ("74.220.49.0/24", "74.220.57.0/24")
 
 
 class IngressAllowlist:
-    def __init__(self, app, allowed: Iterable[str] = HOST_SAMPLING_ALLOWED_CIDRS):
+    def __init__(self, app, allowed: Iterable[str] | None = None):
         self.app = app
+        if allowed is None:
+            configured = os.environ.get(
+                "OMNI_HOST_SAMPLING_ALLOWED_CIDRS", ",".join(HOST_SAMPLING_ALLOWED_CIDRS)
+            )
+            allowed = tuple(item.strip() for item in configured.split(","))
         self.networks = tuple(ipaddress.IPv4Network(cidr, strict=True) for cidr in allowed)
         if not self.networks:
             raise ValueError("Ingress allowlist must not be empty")

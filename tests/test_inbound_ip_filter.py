@@ -1,5 +1,7 @@
 """Application-layer allowlist tests without MCP/Render dependencies."""
 import asyncio
+import os
+from unittest.mock import patch
 import sys
 import unittest
 from pathlib import Path
@@ -58,6 +60,15 @@ class IngressIPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.request(path="/healthz", method="GET"), (200, True))
         self.assertEqual(await self.request(path="/healthz", method="HEAD"), (200, True))
         self.assertEqual(await self.request(path="/healthz", method="POST"), (403, False))
+
+    async def test_env_configured_cidrs(self):
+        value = "74.220.49.0/24,74.220.57.0/24"
+        with patch.dict(os.environ, {"OMNI_HOST_SAMPLING_ALLOWED_CIDRS": value}):
+            allowed = IngressAllowlist(None)
+            self.assertEqual(tuple(str(x) for x in allowed.networks), HOST_SAMPLING_ALLOWED_CIDRS)
+        with patch.dict(os.environ, {"OMNI_HOST_SAMPLING_ALLOWED_CIDRS": ""}):
+            with self.assertRaises(ValueError):
+                IngressAllowlist(None)
 
     async def test_empty_allowlist_is_not_allowed(self):
         with self.assertRaises(ValueError):

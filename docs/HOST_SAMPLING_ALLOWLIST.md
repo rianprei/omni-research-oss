@@ -10,6 +10,10 @@ Allowed IPv4 CIDRs (and no others):
 - 74.220.49.0/24
 - 74.220.57.0/24
 
+The service can set OMNI_HOST_SAMPLING_ALLOWED_CIDRS to the comma-separated
+CIDRs above via Render environment configuration. When omitted, these exact
+two ranges remain the default. An empty or malformed value fails startup.
+
 server/inbound_ip_filter.py examines the single CF-Connecting-IP header forwarded
 by the Cloudflare edge in front of Render. Requests without this header,
 with duplicate/malformed IPs or from other networks receive HTTP 403.
