@@ -38,7 +38,8 @@ def req(path, method="GET", body=None, extra=None, form=False):
     except urllib.error.HTTPError as e:
         response=e
     raw=response.read(120000)
-    return response.status,dict(response.headers),raw
+    # Preserve email.message.Message's case-insensitive HTTP header lookup.
+    return response.status,response.headers,raw
 
 def js(raw):
     return json.loads(raw.decode())
