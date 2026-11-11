@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: omni-research-oss-mcp
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-cloud.txt
+    startCommand: uvicorn server.cloud:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.1
+      - key: OMNI_STATE_DIR
+        value: /tmp/omni-research-public

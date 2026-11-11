@@ -1,0 +1,53 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "omni-research-oss",
+  "version": "1.3.0",
+  "description": "Public cloud research edition: 12 safe read-only MCP tools and six research skills; no local execution required.",
+  "author": {
+    "name": "OmniResearch OSS Contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "research",
+    "search",
+    "deep-research",
+    "open-source",
+    "mcp",
+    "citations",
+    "scholarly",
+    "github",
+    "source-verification"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "OmniResearch OSS",
+        "shortDescription": "Pesquisa com fontes abertas",
+        "longDescription": "Pesquisa web, acadêmica, código, notícias e comunidades com 12 ferramentas MCP públicas e seis skills de análise. Ferramentas locais de arquivos e memória ficam indisponíveis na edição pública para evitar vazamento entre usuários. Requer conexão HTTPS a um serviço hospedado; provedores externos podem limitar requisições.",
+        "developerName": "OmniResearch OSS Contributors",
+        "category": "Education & Research",
+        "capabilities": [
+          "Interactive"
+        ],
+        "defaultPrompt": [
+          "Pesquise este tema em várias fontes, compare evidências e produza um relatório com citações verificáveis.",
+          "Audite as fontes e identifique contradições nesta pesquisa.",
+          "Investigue um tema científico e reúna referências DOI relevantes."
+        ],
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png"
+      },
+      "review": {
+        "prompts": [
+          "Pesquise o estado da arte de mecanismos de pesquisa multimotor e compare evidências com fontes primárias.",
+          "Encontre artigos sobre recuperação aumentada por geração, com DOI e limitações metodológicas.",
+          "Compare dois projetos GitHub de código aberto e indique as diferenças comprovadas pelo código.",
+          "Faça uma investigação profunda com contraditório e escreva um relatório com citações."
+        ]
+      },
+      "publication": {
+        "release_notes": "Cloud v1.3.0 candidate: 12 read-only public research MCP tools and 6 skills. Excludes local file and SQLite memory tools from public service pending authenticated per-user isolation."
+      }
+    }
+  }
+}

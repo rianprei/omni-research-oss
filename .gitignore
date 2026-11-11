@@ -1,0 +1,28 @@
+# Secrets / local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa
+id_ed25519
+gh-config.yml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Runtime state
+*.sqlite*
+*.sqlite3
+state/
+browser-profile/
+profiles/
+research_notes/
+reports/
+
+# OS
+.DS_Store
