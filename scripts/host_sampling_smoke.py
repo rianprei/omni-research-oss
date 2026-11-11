@@ -2,7 +2,7 @@
 """Authenticated MCP smoke: no model credentials and no sampling client."""
 import json, os, urllib.request, urllib.error
 
-BASE=os.getenv("OMNI_SAMPLING_URL","http://127.0.0.1:8798/mcp")
+BASE=os.getenv("OMNI_SAMPLING_URL","http://localhost:8798/mcp")
 TOKEN=os.environ["OMNI_AGENT_ACCESS_TOKEN"]
 headers={
     "authorization":"Bearer "+TOKEN,
@@ -53,7 +53,7 @@ def main():
     assert unauth=={"http_error":401},unauth
     initialized=rpc("initialize",1,{"protocolVersion":"2025-06-18","capabilities":{},
         "clientInfo":{"name":"sampling-unsupported-test","version":"0.1"}})
-    assert initialized["result"]["serverInfo"]["name"]=="Omni Host Sampling (Experimental)",initialized
+    assert initialized.get("result",{}).get("serverInfo",{}).get("name")=="Omni Host Sampling (Experimental)",initialized
     rpc("notifications/initialized",None,notification=True)
     listed=rpc("tools/list",2,{})
     names={x["name"] for x in listed["result"]["tools"]}
