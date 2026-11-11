@@ -25,8 +25,14 @@ class ProviderRegressionTests(unittest.TestCase):
         def fake(q, provider, limit): return [{"url":"https://example.org/","source":provider,"title":"Example"}]
         with patch.object(e, "web_engine",side_effect=fake) as call,patch.object(e,"_cache_get",return_value=None),patch.object(e,"_cache_put"):
             result=e.web_search("audit query",limit=1)
-        self.assertEqual(result["engines_attempted"],["duckduckgo","wikipedia"])
+        self.assertEqual(result["engines_attempted"],["wikipedia","google-news"])
         self.assertEqual(call.call_count, 2)
+
+    def test_news_rss_as_web_discovery(self):
+        with patch.object(e,"news_search",return_value={"results":[{"title":"African report","url":"https://example.org/report","source":"google-news-rss"}]}) as news:
+            result=e.web_engine("africa","google-news",limit=2)
+        self.assertEqual(result[0]["source"],"google-news-rss")
+        news.assert_called_once_with("africa",limit=2)
 
     def test_duckduckgo_lite_organic_result_parser(self):
         html='<a class="result-link" href="https://example.org/paper">An example research source</a>'
