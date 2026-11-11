@@ -5,8 +5,30 @@ import types
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
+# The ordinary offline CI does not install optional cloud MCP dependencies.
+# Stub only the MCP type constructors; the dedicated CI imports the real SDK.
+try:
+    from mcp.types import TextContent
+except ImportError:
+    mcp_stub = types.ModuleType("mcp")
+    mcp_stub.__path__ = []
+    types_stub = types.ModuleType("mcp.types")
+    class TextContent:
+        def __init__(self, type="text", text=""):
+            self.type, self.text = type, text
+    class SamplingMessage:
+        def __init__(self, role, content):
+            self.role, self.content = role, content
+    class ModelHint:
+        def __init__(self, name): self.name = name
+    class ModelPreferences:
+        def __init__(self, hints): self.hints = hints
+    for item in (TextContent, SamplingMessage, ModelHint, ModelPreferences):
+        setattr(types_stub, item.__name__, item)
+    mcp_stub.types = types_stub
+    sys.modules["mcp"] = mcp_stub
+    sys.modules["mcp.types"] = types_stub
 import host_sampling_core as core
-from mcp.types import TextContent
 
 class FakeClient:
     def __init__(self, supported=True):
