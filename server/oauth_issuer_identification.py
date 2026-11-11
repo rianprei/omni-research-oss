@@ -42,7 +42,8 @@ class OAuthIssuerIdentification:
         if not issuer.startswith("https://") and not issuer.startswith("http://localhost:"):
             raise ValueError("OAuth issuer must be HTTPS (or localhost for CI)")
         self.app = app
-        self.issuer = issuer.rstrip("/")
+        # Match the MCP SDK\u0027s canonical AnyHttpUrl issuer, which ends with a slash.
+        self.issuer = issuer.rstrip("/") + "/"
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
