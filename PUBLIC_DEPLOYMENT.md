@@ -2,13 +2,46 @@
 
 This is a candidate, **not a published or connected ChatGPT plugin**.
 
+The source is published at **<https://github.com/rianprei/omni-research-oss>** (branch `main`).
+The `render.yaml` Blueprint in this repository is the deployment definition.
+
 ## Deploy
 
-1. Place this project in a Git repository the Render account can access.
-2. Deploy the `render.yaml` Blueprint on a **free** instance or create a Python web service with its build and start commands.
-3. Confirm `RENDER_EXTERNAL_HOSTNAME` and verify `/mcp` using a compatible MCP client.
-4. Add the **verified** HTTPS endpoint to a separate submission copy of `mcp.json` using `type: streamable-http`.
-5. Confirm OAuth/authentication policy with the OpenAI Developer Portal, complete required listing URLs, verification, evidence, demo and review cases, then submit for approval. Public listing is never automatic.
+1. **Connect the repository.** In the Render dashboard, choose *New → Blueprint*, connect the GitHub account that owns `rianprei/omni-research-oss`, and select the repository. Render reads `render.yaml` from the root of the default branch.
+2. **Apply the Blueprint.** Keep the generated service name, the `free` plan, and the region closest to the users. Render builds with `pip install -r requirements-cloud.txt` and starts with `uvicorn server.cloud:app --host 0.0.0.0 --port $PORT`.
+3. **Confirm the hostname.** Render sets `RENDER_EXTERNAL_HOSTNAME` automatically. The service refuses to start without it, and the transport security layer only accepts that hostname plus the ChatGPT origins. Note the public hostname, for example `omni-research-oss-mcp.onrender.com`.
+4. **Verify the endpoint.** Both checks must pass before anything is published:
+
+   ```bash
+   HOST=omni-research-oss-mcp.onrender.com
+
+   # health check route
+   curl -fsS "https://$HOST/healthz"
+
+   # MCP initialize over streamable HTTP
+   curl -fsS "https://$HOST/mcp" \
+     -H 'Content-Type: application/json' \
+     -H 'Accept: application/json, text/event-stream' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}'
+   ```
+
+   `tools/list` must return exactly the **12** public tools. `read_document`, `memory_save` and `memory_search` must be absent.
+5. **Add the verified endpoint to the submission copy of `mcp.json`** using `type: streamable-http` and the real hostname. `mcp.json` is deliberately **not** committed to this repository: publishing an invented URL would be wrong, and the file must only exist once the endpoint answers.
+6. **Submit.** Confirm the OAuth/authentication policy with the OpenAI Developer Portal, complete the required listing URLs, identity verification, evidence, demo and review cases, then submit for approval. Public listing is never automatic.
+
+### Render API alternative
+
+If the Render account has an API key (`https://api.render.com`), the same Blueprint can be applied without the dashboard:
+
+```bash
+export RENDER_API_KEY=...        # never commit this
+curl -sS -X POST https://api.render.com/v1/services \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"service": {"name":"omni-research-oss-mcp","repo":"https://github.com/rianprei/omni-research-oss","branch":"main","runtime":"python","plan":"free","buildCommand":"pip install -r requirements-cloud.txt","startCommand":"uvicorn server.cloud:app --host 0.0.0.0 --port $PORT","healthCheckPath":"/healthz","autoDeploy":true}}'
+```
+
+Free instances sleep after inactivity and the first request after a sleep is slow. This is a free-tier limitation, not a service fault.
 
 ## Security and functionality
 
@@ -18,3 +51,14 @@ This is a candidate, **not a published or connected ChatGPT plugin**.
 - `mcp.json` is deliberately absent because no endpoint has been deployed and verified. Do not publish with an invented URL.
 - Some providers are scraped or rate-limited; sources can be inaccessible. The skill-based agent coordination relies on the host's support, it is not an embedded remote model.
 - No guarantee of a deployed Render service, review acceptance or publicly listed plugin at this stage.
+
+## Pre-deploy verification already performed
+
+The repository CI (`.github/workflows/ci.yml`) runs on every push and pull request and must be green before deploying:
+
+- byte-compile of `server/`;
+- the offline unit and integration suite (`python3 -m unittest discover -s tests`);
+- an MCP stdio smoke test over `initialize`, `tools/list` and `health_check`;
+- an import check of `server.cloud` against the real `requirements-cloud.txt`, with `RENDER_EXTERNAL_HOSTNAME` set.
+
+The import check is the one that matters for the deployment: it proves the pinned `mcp` SDK exposes `MCPServer`, `TransportSecuritySettings` and `streamable_http_app` with the signatures the entrypoint uses.
