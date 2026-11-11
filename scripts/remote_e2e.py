@@ -76,7 +76,11 @@ def summarize(name,result,seconds):
     results=data.get("results") or data.get("sources") or data.get("pages") or data.get("evidence") or []
     if isinstance(results,list): count=len(results)
     else: count=None
-    status="PASS" if name=="health_check" or count is None or count>0 else "DEGRADED"
+    # Single-document tools do not return a results list. Check their actual fields.
+    if name=="fetch_source": count=1 if data.get("text") and data.get("url") else 0
+    if name=="citation_lookup": count=1 if data.get("doi") and data.get("title") else 0
+    if name=="health_check": count=1 if data.get("status")=="ok" else 0
+    status="PASS" if count is None or count>0 else "DEGRADED"
     if data_errors and count==0: status="DEGRADED"
     if name=="code_search/tokenless" and data.get("error"):status="EXPECTED_LIMIT"
     return {"tool":name,"status":status,"seconds":round(seconds,2),"items":count,"provider_errors":str(data_errors)[:300] if data_errors else None,"message":str(data.get("error") or data.get("note") or "")[:110]}
