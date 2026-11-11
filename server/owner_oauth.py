@@ -11,6 +11,7 @@ Use durable identity/storage for multi-user production deployments.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import html
@@ -89,7 +90,7 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
             if not isinstance(data, dict):
                 return None
             return data
-        except (ValueError, UnicodeError, TypeError):
+        except (ValueError, UnicodeError, TypeError, binascii.Error):
             return None
 
     def _client_secret(self, client_id: str) -> str:
