@@ -1,0 +1,37 @@
+name: Experimental host sampling bridge
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/host_sampling_*.py'
+      - 'tests/test_host_sampling_core.py'
+      - '.github/workflows/host-sampling-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/host_sampling_*.py'
+      - 'tests/test_host_sampling_core.py'
+      - '.github/workflows/host-sampling-ci.yml'
+permissions:
+  contents: read
+jobs:
+  sampling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install official MCP Python SDK
+        run: pip install -r requirements-cloud.txt
+      - name: Check code and run tests without any model credential
+        run: |
+          python -m compileall -q server/host_sampling_core.py server/host_sampling_cloud.py
+          python -m unittest discover -s tests -p 'test_host_sampling_core.py' -v
+      - name: Verify MCP app imports (requires bearer config)
+        env:
+          RENDER_EXTERNAL_HOSTNAME: localhost
+          OMNI_AGENT_ACCESS_TOKEN: 'mock-local-only-test-token-longer-than-thirty-two-characters'
+        run: |
+          python -c "from server.host_sampling_cloud import mcp, app; print(mcp.name)"
