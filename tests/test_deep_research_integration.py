@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'deep-research' / 'SKILL.md'
 REFS = SKILL.parent / 'references'
-EXPECTED_VERSION = '1.3.0'
+EXPECTED_VERSION = '1.4.0'
 
 
 def declared_versions():
@@ -19,7 +19,7 @@ def declared_versions():
 
     cloud = (ROOT / 'server' / 'cloud.py').read_text(encoding='utf-8')
     versions['server/cloud.py'] = re.search(
-        r"MCPServer\('OmniResearch OSS',\s*version='([^']+)'", cloud
+        r'version\s*=\s*"([0-9.]+)"', cloud
     ).group(1)
 
     main = (ROOT / 'server' / 'main.py').read_text(encoding='utf-8')
@@ -99,8 +99,8 @@ class DeepResearchIntegrationTests(unittest.TestCase):
             self.assertNotRegex(cloud, rf'def {local_only}\b')
         exposed = set(re.findall(r'^def ([a-z_]+)\(', cloud, re.M)) - {'_bounds'}
         self.assertEqual(
-            len(exposed), 12,
-            f'cloud should expose 12 public tools, got {len(exposed)}: {sorted(exposed)}',
+            len(exposed), 6,
+            f'cloud should expose 6 public tools, got {len(exposed)}: {sorted(exposed)}',
         )
 
 

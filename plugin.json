@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "omni-research-oss",
-  "version": "1.3.0",
-  "description": "Public cloud research edition: 12 safe read-only MCP tools and six research skills; no local execution required.",
+  "version": "1.4.0",
+  "description": "Cloud research MCP with one unified multi-source search tool, five supporting read-only tools, and six research skills.",
   "author": {
     "name": "OmniResearch OSS Contributors"
   },
@@ -23,7 +23,7 @@
       "interface": {
         "displayName": "OmniResearch OSS",
         "shortDescription": "Pesquisa com fontes abertas",
-        "longDescription": "Pesquisa web, acadêmica, código, notícias e comunidades com 12 ferramentas MCP públicas e seis skills de análise. Ferramentas locais de arquivos e memória ficam indisponíveis na edição pública para evitar vazamento entre usuários. Requer conexão HTTPS a um serviço hospedado; provedores externos podem limitar requisições.",
+        "longDescription": "Uma ferramenta de pesquisa unificada omni_research-deep combina seis categorias: web, academia, GitHub, notícias, comunidades e datasets. Cinco ferramentas MCP auxiliares buscam documentos, mapeiam sites, comparam evidências, resolvem DOI e verificam saúde. Inclui seis skills. Pesquisa não executa modelos nem agentes autônomos no servidor. Limitações de provedores externos e autenticação se aplicam.",
         "developerName": "OmniResearch OSS Contributors",
         "category": "Education & Research",
         "capabilities": [
@@ -46,7 +46,7 @@
         ]
       },
       "publication": {
-        "release_notes": "Cloud v1.3.0 candidate: 12 read-only public research MCP tools and 6 skills. Excludes local file and SQLite memory tools from public service pending authenticated per-user isolation."
+        "release_notes": "Cloud v1.4.0: seven search APIs consolidated into omni_research-deep; five read-only utility tools retained. No local filesystem or notes exposed remotely."
       }
     }
   }

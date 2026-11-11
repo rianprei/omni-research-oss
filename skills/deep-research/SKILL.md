@@ -5,17 +5,17 @@ description: Use for complex multi-source research requiring parallel subtopic i
 
 # Deep research: researcher → writer pipeline
 
-This skill implements an original coordinator/researcher/writer workflow for OmniResearch OSS. The independent role guidance is at `references/researcher.md` and `references/report-writer.md`. It uses host subagent APIs when available; these references do not install an agent runtime.
+This skill implements an original coordinator/researcher/writer workflow for OmniResearch OSS. Use `omni_research-deep` for multi-source discovery; the MCP itself does not spawn subagents. The independent role guidance is at `references/researcher.md` and `references/report-writer.md`. It uses host subagent APIs when available; these references do not install an agent runtime.
 
 ## When to use
 
-Use for multi-angle comparisons, trends, industry or market analysis, history, science, literature reviews or a comprehensive report grounded in several independent sources. For a single factual lookup, use the `omni-research` workflow or `web_search` directly instead.
+Use for multi-angle comparisons, trends, industry or market analysis, history, science, literature reviews or a comprehensive report grounded in several independent sources. For a single factual lookup, use the `omni-research` workflow or `omni_research-deep` with `mode="web"` instead.
 
 ## Available capabilities and fallback
 
 - **With `Agent` or `Task` tool:** orchestrate independent *foreground* researcher subagents in parallel, each with its own assigned output file. After collecting their notes, spawn **one** foreground report-writer subagent.
 - **Without a subagent tool:** never pretend you spawned agents. Conduct the researcher process directly using `references/researcher.md`, then perform a logically separate writer pass guided by `references/report-writer.md`. Explain that this was single-agent execution.
-- Prefer OmniResearch MCP tools for source discovery and evidence extraction: `research_bundle`, `web_search`, `academic_search`, `code_search`, `social_search`, `news_search`, `dataset_search`, `fetch_source`, `compare_evidence`, `citation_lookup`, `map_website`; use host `WebSearch`/`WebFetch` if the local MCP tools are unavailable. Never claim an MCP result without an actual call.
+- Prefer OmniResearch MCP tools for source discovery and evidence extraction: `omni_research-deep` (all research discovery), `fetch_source`, `compare_evidence`, `citation_lookup`, `map_website`; use host `WebSearch`/`WebFetch` if the local MCP tools are unavailable. Never claim an MCP result without an actual call.
 - Research and report artifacts are created only where filesystem writes are available and allowed. If writes are unavailable, produce the evidence notes and final report directly in the answer without claiming files exist.
 
 ## Orchestrator process

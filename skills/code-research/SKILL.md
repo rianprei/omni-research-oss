@@ -5,7 +5,7 @@ description: Use to compare open-source repositories, research libraries or fram
 
 # Technical and repository research
 
-Use `code_search` in `repositories` or `issues` mode; optionally use `code` mode only if `GITHUB_TOKEN` is configured. Use `web_search` for docs, advisories and external issue threads. Inspect actual repository files and tagged releases with an authorized GitHub connector or `fetch_source` for public raw files; repository descriptions alone are insufficient.
+Use `omni_research-deep` with `mode="code"` and `code_mode="repositories"` or `code_mode="issues"`; use `code_mode="code"` only if `GITHUB_TOKEN` is configured. Use `omni_research-deep` with `mode="web"` for public docs and advisories. Inspect actual repository files and tagged releases with an authorized GitHub connector or `fetch_source` for public raw files; repository descriptions alone are insufficient.
 
 Score implementations by maintainability and security rather than stars: license, contributor activity, releases, tests and CI, reproducible installation, architecture, dependency health, latency/resource benchmarks with fixed hardware and inputs, failure behavior, compatibility and documentation. Do not label a project "best" without comparable data. Verify version/release dates and distinguish benchmark methodology from marketing.
 
