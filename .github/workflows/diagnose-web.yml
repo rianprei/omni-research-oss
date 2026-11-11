@@ -1,0 +1,21 @@
+name: Web provider diagnostic
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/diagnose_web.py
+      - .github/workflows/diagnose-web.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check HTML search responses without copying page content
+        run: python3 -u scripts/diagnose_web.py
