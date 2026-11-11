@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 from oauth_issuer_identification import OAuthIssuerIdentification, _with_issuer
 
-ISSUER = "https://omni-host-sampling-mcp.onrender.com"
+ISSUER = "https://omni-host-sampling-mcp.onrender.com/"
 STABLE = "https://chatgpt.com/connector_platform_oauth_redirect"
 LEGACY = "https://chatgpt.com/connector/oauth/sampleCallback"
 
@@ -75,7 +75,7 @@ class IssuerIdentificationTests(unittest.IsolatedAsyncioTestCase):
             "https://evil.example/connector/oauth/x?code=123&state=abc",
             "https://chatgpt.com/connector/oauth/?code=123&state=abc",
             "https://chatgpt.com/connector/oauth/cb?prompt=123",
-            ISSUER+"/owner/approve?ticket=123",
+            ISSUER+"owner/approve?ticket=123",
             "http://chatgpt.com/connector_platform_oauth_redirect?code=123",
         ):
             self.assertEqual(_with_issuer(url,ISSUER),url)
