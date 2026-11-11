@@ -6,6 +6,7 @@ on:
       - 'server/host_sampling_*.py'
       - 'server/inbound_ip_filter.py'
       - 'tests/test_inbound_ip_filter.py'
+      - 'tests/test_openai_egress_allowlist.py'
       - 'tests/test_host_sampling_core.py'
       - 'scripts/host_sampling_smoke.py'
       - '.github/workflows/host-sampling-ci.yml'
@@ -15,6 +16,7 @@ on:
       - 'server/host_sampling_*.py'
       - 'server/inbound_ip_filter.py'
       - 'tests/test_inbound_ip_filter.py'
+      - 'tests/test_openai_egress_allowlist.py'
       - 'tests/test_host_sampling_core.py'
       - '.github/workflows/host-sampling-ci.yml'
 permissions:
@@ -34,7 +36,18 @@ jobs:
         run: |
           python -m compileall -q server/host_sampling_core.py server/host_sampling_cloud.py server/inbound_ip_filter.py
           python -m unittest discover -s tests -p 'test_inbound_ip_filter.py' -v
+          python -m unittest discover -s tests -p 'test_openai_egress_allowlist.py' -v
           python -m unittest discover -s tests -p 'test_host_sampling_core.py' -v
+      - name: Verify official ChatGPT egress feed format
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'server')
+          from inbound_ip_filter import _fetch_openai_prefixes
+          networks = _fetch_openai_prefixes()
+          assert networks, "Official egress feed is empty"
+          print("OFFICIAL_OPENAI_EGRESS_OK",len(networks))
+          PY
       - name: Verify MCP app imports (requires bearer config)
         env:
           RENDER_EXTERNAL_HOSTNAME: localhost
