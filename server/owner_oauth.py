@@ -44,9 +44,12 @@ def _is_chatgpt_callback(url: str) -> bool:
         return False
     if parts.path == "/connector_platform_oauth_redirect":
         return True
-    return (parts.path.startswith("/connector/oauth/") and
-            len(parts.path) < 300 and
-            all(c.isalnum() or c in "-_" for c in parts.path.removeprefix("/connector/oauth/")))
+    suffix = parts.path.removeprefix("/connector/oauth/")
+    return (
+        parts.path.startswith("/connector/oauth/")
+        and 1 <= len(suffix) < 300
+        and all(c.isalnum() or c in "-_" for c in suffix)
+    )
 
 
 @dataclass
