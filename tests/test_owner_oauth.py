@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 from mcp.server.auth.provider import AuthorizationParams, AuthorizeError, RegistrationError
+from mcp.shared.auth import OAuthClientInformationFull
 from starlette.requests import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
@@ -28,9 +29,15 @@ def fake_request(method: str, path: str, body: bytes = b""):
 class OwnerOAuthTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.provider = OwnerOAuthProvider(PASSWORD)
-        self.client = SimpleNamespace(
-            client_id="chatgpt-testing-client", redirect_uris=[CALLBACK],
-        )
+        self.client = OAuthClientInformationFull.model_validate({
+            "client_id": "temporary-client-id",
+            "redirect_uris": [CALLBACK],
+            "token_endpoint_auth_method": "client_secret_post",
+            "grant_types": ["authorization_code"],
+            "response_types": ["code"],
+            "scope": "mcp",
+            "client_name": "ChatGPT test",
+        })
         await self.provider.register_client(self.client)
         self.params = AuthorizationParams(
             state="opaque-state",
@@ -105,8 +112,25 @@ class OwnerOAuthTests(unittest.IsolatedAsyncioTestCase):
         access = self.provider._issue_token(self.client.client_id, MCP_RESOURCE)
         record = await self.provider.load_access_token(access.access_token)
         self.assertIsNotNone(record)
-        record.expires_at = int(time.time()) - 1
-        self.assertIsNone(await self.provider.load_access_token(access.access_token))
+        expired = self.provider._seal("oa1", {
+            "client_id": self.client.client_id, "scopes": ["mcp"],
+            "iat": int(time.time()) - 1000, "exp": int(time.time()) - 1,
+            "resource": MCP_RESOURCE, "subject": "omni-owner",
+        })
+        self.assertIsNone(await self.provider.load_access_token(expired))
+
+    async def test_signed_dcr_client_and_access_survive_restart(self):
+        cid = self.client.client_id
+        self.assertTrue(cid.startswith("oc1."))
+        access = self.provider._issue_token(cid, MCP_RESOURCE)
+        self.provider.clients.clear()
+        self.provider.access_tokens.clear()
+        recovered = await self.provider.get_client(cid)
+        self.assertEqual(recovered.client_id, cid)
+        self.assertEqual(recovered.client_secret, self.provider._client_secret(cid))
+        self.assertIsNotNone(await self.provider.load_access_token(access.access_token))
+        self.assertIsNone(await self.provider.get_client(cid + "corrupt"))
+        self.assertIsNone(await self.provider.load_access_token(access.access_token + "corrupt"))
 
     async def test_expired_ticket(self):
         uri = await self.provider.authorize(self.client, self.params)
