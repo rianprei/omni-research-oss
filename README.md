@@ -1,5 +1,8 @@
 # OmniResearch OSS v1.3.0 — Cloud candidate
 
+> **Cloud provider reliability (2026-11-11):** Hosted `web_search` defaults to Wikimedia and Google News RSS because anonymous Bing HTML, DuckDuckGo, Mojeek and Reddit are unreliable or blocked from this Render region. Google News covers current news, **not** the complete web. Optional engines remain selectable and report errors when blocked. For general web discovery, the calling agent should fall back to its native web-search capability when available. Hosted PDF extraction uses pypdf, bounded to 2 MB input. This is not a zero-risk URL fetcher; additional DNS pinning and authentication are needed for sensitive production deployments.
+
+
 [![CI](https://github.com/rianprei/omni-research-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/rianprei/omni-research-oss/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
