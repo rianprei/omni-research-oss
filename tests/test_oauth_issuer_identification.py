@@ -93,8 +93,10 @@ class IssuerIdentificationTests(unittest.IsolatedAsyncioTestCase):
             await send({"type":"http.response.start","status":200,"headers":[]})
             await send({"type":"http.response.body","body":b"chunk1","more_body":True})
             await send({"type":"http.response.body","body":b"chunk2","more_body":False})
+        async def collect(event):
+            seen.append(event)
         await OAuthIssuerIdentification(streaming,ISSUER)(
-            {"type":"http","path":"/mcp","method":"POST"},lambda:None,seen.append)
+            {"type":"http","path":"/mcp","method":"POST"},lambda:None,collect)
         self.assertEqual([x.get("body") for x in seen[1:]],[b"chunk1",b"chunk2"])
 
     async def test_metadata_issuer_mismatch_is_not_advertised(self):
