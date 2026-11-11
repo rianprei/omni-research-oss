@@ -235,7 +235,7 @@ def normalize(items):
 
 
 def web_search(query, engines=None, limit=12):
-    engines=engines or ['duckduckgo','bing','mojeek','wikipedia']
+    engines=engines or ['bing','wikipedia']
     engines=[x for x in engines if x in ('duckduckgo','bing','mojeek','wikipedia','searxng')]
     if not engines: raise ValueError('No valid search engines')
     key=json.dumps(['web',query,engines,limit]); cached=_cache_get(key)
@@ -320,12 +320,12 @@ def code_search(query, mode='repositories',limit=10):
     else: d=jget(url)
     items=[]
     for x in d.get('items',[]):
-        items.append({'title':x.get('full_name') or x.get('title') or x.get('login') or x.get('name',''), 'url':x.get('html_url') or x.get('url'), 'snippet':x.get('description') or x.get('body','')[:400] or '', 'source':'github', 'stars':x.get('stargazers_count'), 'updated_at':x.get('updated_at'), 'license':(x.get('license') or {}).get('spdx_id') if isinstance(x.get('license'),dict) else None})
+        items.append({'title':x.get('full_name') or x.get('title') or x.get('login') or x.get('name',''), 'url':x.get('html_url') or x.get('url'), 'snippet':(x.get('description') or x.get('body') or '')[:400] or '', 'source':'github', 'stars':x.get('stargazers_count'), 'updated_at':x.get('updated_at'), 'license':(x.get('license') or {}).get('spdx_id') if isinstance(x.get('license'),dict) else None})
     return {'query':query,'mode':mode,'results':normalize(items),'incomplete_results':d.get('incomplete_results',False)}
 
 
 def social_search(query, sources=None,limit=10):
-    sources=sources or ['hackernews','stackoverflow','reddit']
+    sources=sources or ['hackernews','stackoverflow']
     sources=[x for x in sources if x in ('hackernews','stackoverflow','reddit')]
     errors={}; batches={}; q=up.quote_plus(query)
     def go(src):
@@ -348,7 +348,11 @@ def social_search(query, sources=None,limit=10):
 
 
 def news_search(query,limit=15,locale='en-US'):
-    url=f'https://news.google.com/rss/search?q={up.quote_plus(query)}&hl={up.quote(locale)}&gl=US&ceid=US:en'
+    if not isinstance(locale,str) or not re.fullmatch(r'[a-zA-Z]{2,3}-[a-zA-Z]{2}',locale):
+        raise ValueError('locale must be a language-region such as pt-BR or en-US')
+    lang,region=locale.split('-')
+    lang,region=lang.lower(),region.upper()
+    url=f'https://news.google.com/rss/search?q={up.quote_plus(query)}&hl={up.quote(lang+"-"+region)}&gl={region}&ceid={region}:{lang}'
     body,_,_=read_text(url)
     root=ET.fromstring(body)
     items=[]
