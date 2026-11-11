@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: omni-subagents-oss-mcp
+    runtime: python
+    plan: free
+    region: virginia
+    repo: https://github.com/rianprei/omni-research-oss
+    branch: main
+    buildCommand: pip install -r requirements-cloud.txt
+    startCommand: uvicorn server.agent_cloud:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.1
+      - key: OMNI_AGENT_ACCESS_TOKEN
+        sync: false
