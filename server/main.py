@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import engine as e
+import unified
 
 
 def arg(name, description, typ='string', default=None, enum=None):
@@ -21,25 +22,34 @@ def arg(name, description, typ='string', default=None, enum=None):
 
 
 def tool(name, description, props, required=()):
-    return {'name':name,'description':description,'inputSchema':{'type':'object','properties':props,'required':list(required),'additionalProperties':False},'annotations':{'readOnlyHint':name!='memory_save','destructiveHint':False,'openWorldHint':name in {'web_search','academic_search','code_search','social_search','news_search','dataset_search','fetch_source','map_website','compare_evidence','research_bundle','citation_lookup'}}}
+    return {'name':name,'description':description,'inputSchema':{'type':'object','properties':props,'required':list(required),'additionalProperties':False},'annotations':{'readOnlyHint':name!='memory_save','destructiveHint':False,'openWorldHint':name in {'omni_research-deep','fetch_source','map_website','compare_evidence','research_bundle','citation_lookup'}}}
 
 TOOLS=[
-    tool('web_search','Multi-engine public web search with reciprocal-rank fusion, dedup, provenance and failure reporting; no paid API key.',{'query':arg('q','Search terms'),'engines':arg('e','Optional engine names: duckduckgo, bing, mojeek, wikipedia, searxng','array'),'limit':arg('l','Maximum results 1-30','integer',12)},['query']),
-    tool('academic_search','Find scholarly works across OpenAlex, Crossref, arXiv and PubMed, including identifiers and available metadata.',{'query':arg('q','Research question'),'sources':arg('s','Optional: openalex, crossref, arxiv, pubmed','array'),'limit':arg('l','Results per source 1-25','integer',8)},['query']),
-    tool('code_search','Search public GitHub repositories, issues or users. Code-search endpoint requires optional GitHub token.',{'query':arg('q','GitHub search syntax'),'mode':arg('m','GitHub index','string','repositories',['repositories','issues','users','code']),'limit':arg('l','Maximum items','integer',10)},['query']),
-    tool('social_search','Search Hacker News, Stack Overflow and publicly accessible Reddit discussions; opinions are not verified facts.',{'query':arg('q','Search terms'),'sources':arg('s','hackernews, stackoverflow, reddit','array'),'limit':arg('l','Per-source maximum','integer',8)},['query']),
-    tool('news_search','Read Google News public RSS search. Returns publisher, date and source URLs; published dates need original-page verification.',{'query':arg('q','Search terms'),'limit':arg('l','Maximum results','integer',12),'locale':arg('locale','Language-region for Google News feed','string','en-US')},['query']),
-    tool('dataset_search','Discover openly indexed datasets on Hugging Face or Zenodo without credentials.',{'query':arg('q','Search terms'),'source':arg('s','Dataset catalog','string','huggingface',['huggingface','zenodo']),'limit':arg('l','Maximum items','integer',10)},['query']),
-    tool('fetch_source','Fetch and clean an HTTP(S) document; SSRF guard blocks private/localhost addresses, 2MB response cap. PDF requires optional pypdf.',{'url':arg('u','Public URL'),'max_chars':arg('max','Maximum returned text characters','integer',16000)},['url']),
-    tool('map_website','Bounded crawl of same-host public pages, respecting robots.txt when available; no browser rendering.',{'url':arg('u','Public site URL'),'max_pages':arg('n','Pages to retrieve, maximum 15','integer',6)},['url']),
-    tool('read_document','Read local .txt/.md/.csv/.json/.html/.docx/.pptx/.xlsx and optional .pdf. Restrict to OMNI_ALLOWED_DIRS.',{'path':arg('p','Absolute or relative local file path'),'max_chars':arg('c','Maximum characters','integer',16000)},['path']),
-    tool('compare_evidence','Collect relevant passages and numerical/date signals from 1-8 URLs for a claim, without asserting a verdict.',{'claim':arg('c','Atomic testable claim'),'urls':arg('urls','Public source URLs','array')},['claim','urls']),
-    tool('research_bundle','Multi-source parallel evidence collection with stable citation IDs and adversarial research protocol. Final report synthesis is done by the caller model.',{'topic':arg('t','Research topic'),'mode':arg('m','Research emphasis','string','general',['general','academic','technical','trends','news']),'max_results':arg('n','Maximum returned items','integer',16)},['topic']),
-    tool('citation_lookup','Resolve a DOI via Crossref and return bibliographic metadata plus an approximate APA reference.',{'doi':arg('doi','A valid DOI, e.g. 10.1038/xxxxx')},['doi']),
-    tool('memory_save','Save a user-provided research note in a local SQLite database under OMNI_STATE_DIR. No cloud upload.',{'topic':arg('t','Note topic'),'body':arg('b','Note text')},['topic','body']),
-    tool('memory_search','Query locally saved research notes using SQLite FTS5 where available.',{'query':arg('q','Terms or FTS5 query'),'limit':arg('l','Maximum notes','integer',10)},['query']),
-    tool('health_check','Show available providers, optional credentials, configuration and public service limitations.',{}),
+    tool('omni_research-deep','Search all six source categories via one MCP tool; modes deep, web, academic, code, social, news, datasets, technical and trends.',
+         {'query':arg('query','Research question'),
+          'mode':arg('mode','Research scope','string','deep',['deep','web','academic','code','social','news','datasets','technical','trends']),
+          'providers':arg('providers','Subset: web, academic, code, social, news, datasets','array'),
+          'limit':arg('limit','Maximum merged results','integer',16),
+          'locale':arg('locale','Locale for news','string','en-US'),
+          'code_mode':arg('code_mode','GitHub search type','string','repositories',['repositories','issues','users','code']),
+          'dataset_source':arg('dataset_source','Dataset catalog','string','both',['both','huggingface','zenodo']),
+          'web_engines':arg('web_engines','Specific web engines','array'),
+          'academic_sources':arg('academic_sources','Specific scholarly providers','array'),
+          'social_sources':arg('social_sources','Specific communities','array')},['query']),
+    tool('fetch_source','Extract public HTTP(S) documents and PDFs.',
+         {'url':arg('url','Public URL'),'max_chars':arg('max_chars','Returned text characters','integer',16000)},['url']),
+    tool('map_website','Crawl a bounded number of public pages on one host.',
+         {'url':arg('url','Public URL'),'max_pages':arg('max_pages','Pages','integer',6)},['url']),
+    tool('read_document','Read local research documents within OMNI_ALLOWED_DIRS.',
+         {'path':arg('path','Local path'),'max_chars':arg('max_chars','Returned characters','integer',16000)},['path']),
+    tool('compare_evidence','Collect relevant passages from public URLs.',
+         {'claim':arg('claim','Atomic claim'),'urls':arg('urls','Source URLs','array')},['claim','urls']),
+    tool('citation_lookup','Resolve DOI metadata with Crossref.',{'doi':arg('doi','DOI')},['doi']),
+    tool('memory_save','Store local research note.',{'topic':arg('topic','Topic'),'body':arg('body','Body')},['topic','body']),
+    tool('memory_search','Search local notes.',{'query':arg('query','Terms'),'limit':arg('limit','Results','integer',10)},['query']),
+    tool('health_check','Local provider configuration and status.',{}),
 ]
+
 
 
 def bounds(v,lo,hi):
@@ -48,17 +58,16 @@ def bounds(v,lo,hi):
 
 
 def dispatch(name,a):
-    if name=='web_search':return e.web_search(a['query'],a.get('engines'),bounds(a.get('limit',12),1,30))
-    if name=='academic_search':return e.academic_search(a['query'],a.get('sources'),bounds(a.get('limit',8),1,25))
-    if name=='code_search':return e.code_search(a['query'],a.get('mode','repositories'),bounds(a.get('limit',10),1,30))
-    if name=='social_search':return e.social_search(a['query'],a.get('sources'),bounds(a.get('limit',8),1,30))
-    if name=='news_search':return e.news_search(a['query'],bounds(a.get('limit',12),1,30),a.get('locale','en-US'))
-    if name=='dataset_search':return e.dataset_search(a['query'],a.get('source','huggingface'),bounds(a.get('limit',10),1,25))
+    if name=='omni_research-deep':
+        return unified.research(query=a['query'], mode=a.get('mode','deep'),
+            providers=a.get('providers'), limit=bounds(a.get('limit',16),1,30),
+            locale=a.get('locale','en-US'), code_mode=a.get('code_mode','repositories'),
+            dataset_source=a.get('dataset_source','both'), web_engines=a.get('web_engines'),
+            academic_sources=a.get('academic_sources'), social_sources=a.get('social_sources'))
     if name=='fetch_source':return e.extract_url(a['url'],bounds(a.get('max_chars',16000),100,60000))
     if name=='map_website':return e.crawl_site(a['url'],bounds(a.get('max_pages',6),1,15))
     if name=='read_document':return e.document_read(a['path'],bounds(a.get('max_chars',16000),100,60000))
     if name=='compare_evidence':return e.evidence_compare(a['claim'],a['urls'])
-    if name=='research_bundle':return e.deep_research(a['topic'],a.get('mode','general'),bounds(a.get('max_results',16),1,30))
     if name=='citation_lookup':return e.citation_lookup(a['doi'])
     if name=='memory_save':return e.save_note(a['topic'],a['body'])
     if name=='memory_search':return e.search_notes(a['query'],bounds(a.get('limit',10),1,50))
@@ -71,7 +80,7 @@ def handle(req):
     if method=='initialize':
         offered=req.get('params',{}).get('protocolVersion','2025-06-18')
         proto=offered if offered in ('2024-11-05','2025-03-26','2025-06-18','2025-11-25') else '2025-06-18'
-        return {'protocolVersion':proto,'capabilities':{'tools':{'listChanged':False}},'serverInfo':{'name':'omni-research-oss','version':'1.3.0'}}
+        return {'protocolVersion':proto,'capabilities':{'tools':{'listChanged':False}},'serverInfo':{'name':'omni-research-oss','version':'1.4.0'}}
     if method=='ping':return {}
     if method=='tools/list':return {'tools':TOOLS}
     if method=='tools/call':
