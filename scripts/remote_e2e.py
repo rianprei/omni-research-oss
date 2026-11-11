@@ -64,6 +64,8 @@ TASKS = [
  ("news_search/pt-BR", {"query":"África", "limit":1, "locale":"pt-BR"}),
  ("social_search/default", {"query":"Python", "limit":2}),
  ("web_search/bing", {"query":"African Union", "engines":["bing"], "limit":2}),
+ ("web_search/duckduckgo", {"query":"African Union", "engines":["duckduckgo"], "limit":2}),
+ ("fetch_source/pdf", {"url":"https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", "max_chars":500}),
 ]
 NEGATIVE = [
  ("fetch_source/private", "fetch_source", {"url":"http://127.0.0.1/latest/meta-data"}),
@@ -83,10 +85,10 @@ def summarize(name,result,seconds):
     if isinstance(results,list): count=len(results)
     else: count=None
     # Single-document tools do not return a results list. Check their actual fields.
-    if name=="fetch_source": count=1 if data.get("text") and data.get("url") else 0
+    if name.startswith("fetch_source"): count=1 if data.get("text") and data.get("url") else 0
     if name=="citation_lookup": count=1 if data.get("doi") and data.get("title") else 0
     if name=="health_check":
-        count=1 if data.get("status")=="ok" and data.get("providers",{}).get("web_default")==["bing","wikipedia"] else 0
+        count=1 if data.get("status")=="ok" and data.get("providers",{}).get("web_default")==["duckduckgo","wikipedia"] else 0
     status="PASS" if count is None or count>0 else "DEGRADED"
     if data_errors and count==0: status="DEGRADED"
     if name=="code_search/tokenless" and data.get("error"):status="EXPECTED_LIMIT"
