@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine as e
 import unified
 from request_limits import RateLimitedApp
+from pydantic import StrictInt
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from mcp.server.transport_security import TransportSecuritySettings
@@ -34,7 +35,7 @@ def omni_research_deep(
     query: str,
     mode: str = "deep",
     providers: list[str] | None = None,
-    limit: int = 16,
+    limit: StrictInt = 16,
     locale: str = "en-US",
     code_mode: str = "repositories",
     dataset_source: str = "both",
