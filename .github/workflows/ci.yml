@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Offline tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Byte-compile the server
+        run: python3 -m compileall -q server
+
+      - name: Unit and integration tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: MCP stdio smoke test
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health_check","arguments":{}}}' \
+            | python3 server/main.py
+
+  cloud:
+    name: Cloud entrypoint imports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install cloud dependencies
+        run: pip install -r requirements-cloud.txt
+
+      - name: Import the cloud entrypoint
+        env:
+          RENDER_EXTERNAL_HOSTNAME: ci.invalid
+        run: python3 -c "import server.cloud" || python3 -c "import sys; sys.path.insert(0,'server'); import cloud"
