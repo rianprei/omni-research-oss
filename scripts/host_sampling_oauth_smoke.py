@@ -82,6 +82,9 @@ def main():
     assert status==200,(status,raw)
     meta=js(raw)
     assert "S256" in meta["code_challenge_methods_supported"],meta
+    assert meta["issuer"]==BASE+"/",meta
+    assert meta.get("authorization_response_iss_parameter_supported") is True,meta
+    assert BASE+"/" in resource["authorization_servers"],resource
     assert meta.get("registration_endpoint") and meta.get("token_endpoint") and meta.get("authorization_endpoint")
     status,_,raw=req(
         urllib.parse.urlsplit(meta["registration_endpoint"]).path,
@@ -111,6 +114,7 @@ def main():
     assert status==303,(status,raw)
     callback=head["Location"]
     assert callback.startswith(CALLBACK),callback
+    assert urllib.parse.parse_qs(urllib.parse.urlsplit(callback).query).get("iss")==[BASE+"/"],callback
     code=urllib.parse.parse_qs(urllib.parse.urlsplit(callback).query)["code"][0]
     # The browser may repost the form: repeat must return the exact redirect,
     # not an expired-ticket error or a second OAuth authorization code.
@@ -139,7 +143,7 @@ def main():
     names={x["name"] for x in tools["result"]["tools"]}
     assert names=={"agent","spawn_agent","task"},names
     print("OAUTH2_MCP_PASS",json.dumps({
-        "oauth_metadata":True,"pkce_s256":True,"owner_approval":True,
+        "oauth_metadata":True,"pkce_s256":True,"rfc9207_iss":True,"owner_approval":True,
         "bearer_oauth":True,"tools":sorted(names),"model_calls":0,
     }),flush=True)
 

@@ -5,6 +5,8 @@ on:
     paths:
       - 'server/host_sampling_*.py'
       - 'server/owner_oauth.py'
+      - 'server/oauth_issuer_identification.py'
+      - 'tests/test_oauth_issuer_identification.py'
       - 'tests/test_owner_oauth.py'
       - 'scripts/host_sampling_oauth_smoke.py'
       - 'server/inbound_ip_filter.py'
@@ -18,6 +20,8 @@ on:
     paths:
       - 'server/host_sampling_*.py'
       - 'server/owner_oauth.py'
+      - 'server/oauth_issuer_identification.py'
+      - 'tests/test_oauth_issuer_identification.py'
       - 'tests/test_owner_oauth.py'
       - 'scripts/host_sampling_oauth_smoke.py'
       - 'server/inbound_ip_filter.py'
@@ -40,11 +44,12 @@ jobs:
         run: pip install -r requirements-cloud.txt
       - name: Check code and run tests without any model credential
         run: |
-          python -m compileall -q server/host_sampling_core.py server/host_sampling_cloud.py server/inbound_ip_filter.py server/owner_oauth.py scripts/host_sampling_oauth_smoke.py
+          python -m compileall -q server/host_sampling_core.py server/host_sampling_cloud.py server/inbound_ip_filter.py server/owner_oauth.py server/oauth_issuer_identification.py scripts/host_sampling_oauth_smoke.py
           python -m unittest discover -s tests -p 'test_inbound_ip_filter.py' -v
           python -m unittest discover -s tests -p 'test_openai_egress_allowlist.py' -v
           python -m unittest discover -s tests -p 'test_host_sampling_core.py' -v
           python -m unittest discover -s tests -p 'test_owner_oauth.py' -v
+          python -m unittest discover -s tests -p 'test_oauth_issuer_identification.py' -v
       - name: Verify official ChatGPT egress feed format
         run: |
           python - <<'PY'
