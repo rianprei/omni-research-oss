@@ -59,7 +59,13 @@ class IngressIPTests(unittest.IsolatedAsyncioTestCase):
     async def test_health_check_unchanged(self):
         self.assertEqual(await self.request(path="/healthz", method="GET"), (200, True))
         self.assertEqual(await self.request(path="/healthz", method="HEAD"), (200, True))
-        self.assertEqual(await self.request(path="/healthz", method="POST"), (403, False))
+        self.assertEqual(await self.request(path="/healthz", method="POST"), (200, True))
+        # OAuth discovery and owner approval are reachable without a source-IP allowlist.
+        self.assertEqual(await self.request(path="/.well-known/oauth-protected-resource/mcp"), (200, True))
+        self.assertEqual(await self.request(path="/.well-known/oauth-authorization-server"), (200, True))
+        self.assertEqual(await self.request(path="/owner/approve"), (200, True))
+        self.assertEqual(await self.request(path="/register"), (200, True))
+        self.assertEqual(await self.request(path="/token"), (200, True))
 
     async def test_env_configured_cidrs(self):
         value = "74.220.49.0/24,74.220.57.0/24"
