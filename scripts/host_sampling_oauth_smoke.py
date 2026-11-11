@@ -87,7 +87,7 @@ def main():
         "POST",
         {"client_name":"Omni CI OAuth","redirect_uris":[CALLBACK],
          "grant_types":["authorization_code"],"response_types":["code"],
-         "token_endpoint_auth_method":"none","scope":"mcp"})
+         "token_endpoint_auth_method":"client_secret_post","scope":"mcp"})
     assert status in (200,201),(status,raw)
     client=js(raw)
     client_id=client["client_id"]
@@ -114,7 +114,8 @@ def main():
     token_path=urllib.parse.urlsplit(meta["token_endpoint"]).path
     status,_,raw=req(token_path,"POST",{
         "grant_type":"authorization_code","client_id":client_id,
-        "code":code,"redirect_uri":CALLBACK,"code_verifier":verifier,
+        "client_secret":client["client_secret"],"code":code,
+        "redirect_uri":CALLBACK,"code_verifier":verifier,
         "resource":MCP},form=True)
     assert status==200,(status,raw)
     token=js(raw)["access_token"]
