@@ -5,6 +5,7 @@ on:
     paths:
       - 'server/host_sampling_*.py'
       - 'tests/test_host_sampling_core.py'
+      - 'scripts/host_sampling_smoke.py'
       - '.github/workflows/host-sampling-ci.yml'
   push:
     branches: [main]
@@ -35,3 +36,17 @@ jobs:
           OMNI_AGENT_ACCESS_TOKEN: 'mock-local-only-test-token-longer-than-thirty-two-characters'
         run: |
           python -c "from server.host_sampling_cloud import mcp, app; print(mcp.name)"
+      - name: Verify real authenticated MCP messages and unsupported sampling behavior
+        env:
+          RENDER_EXTERNAL_HOSTNAME: localhost
+          OMNI_AGENT_ACCESS_TOKEN: 'mock-local-only-test-token-longer-than-thirty-two-characters'
+        run: |
+          set -euo pipefail
+          python -m uvicorn server.host_sampling_cloud:app --host 127.0.0.1 --port 8798 > /tmp/host-sampling.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" || true' EXIT
+          for n in {1..45}; do
+            if curl -fsS http://127.0.0.1:8798/healthz >/dev/null; then break; fi
+            sleep .2
+          done
+          python scripts/host_sampling_smoke.py
