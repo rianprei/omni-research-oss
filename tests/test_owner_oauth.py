@@ -93,6 +93,18 @@ class OwnerOAuthTests(unittest.IsolatedAsyncioTestCase):
         redir = correct.headers["location"]
         self.assertTrue(redir.startswith(CALLBACK))
         code_value = parse_qs(urlsplit(redir).query)["code"][0]
+        # A repeated form submission before code exchange must return the
+        # EXACT same OAuth redirect without minting another authorization code.
+        repeated = await self.provider.approve(fake_request(
+            "POST", "/owner/approve",
+            f"ticket={ticket}&password={PASSWORD}".encode()
+        ))
+        self.assertEqual(repeated.status_code, 303)
+        self.assertEqual(repeated.headers["location"], redir)
+        self.assertEqual(len(self.provider.codes), before + 1)
+        self.assertEqual((await self.provider.approval_page(
+            fake_request("GET", "/owner/approve")
+        )).status_code, 400)
         code = await self.provider.load_authorization_code(self.client, code_value)
         self.assertIsNotNone(code)
         oauth_token = await self.provider.exchange_authorization_code(self.client, code)
@@ -106,7 +118,26 @@ class OwnerOAuthTests(unittest.IsolatedAsyncioTestCase):
             "POST", "/owner/approve",
             f"ticket={ticket}&password={PASSWORD}".encode()
         ))
-        self.assertEqual(replay.status_code, 400)
+        self.assertEqual(replay.status_code, 200)
+        self.assertIn("Autorização concluída", replay.body.decode())
+
+    async def test_wrong_password_after_approval_is_still_denied(self):
+        uri = await self.provider.authorize(self.client, self.params)
+        ticket = parse_qs(urlsplit(uri).query)["ticket"][0]
+        good = await self.provider.approve(fake_request(
+            "POST", "/owner/approve",
+            f"ticket={ticket}&password={PASSWORD}".encode()
+        ))
+        self.assertEqual(good.status_code, 303)
+        rejected = await self.provider.approve(fake_request(
+            "POST", "/owner/approve", f"ticket={ticket}&password=wrong".encode()
+        ))
+        self.assertEqual(rejected.status_code, 403)
+        still = await self.provider.approve(fake_request(
+            "POST", "/owner/approve",
+            f"ticket={ticket}&password={PASSWORD}".encode()
+        ))
+        self.assertEqual(still.headers["location"], good.headers["location"])
 
     async def test_access_token_expiry(self):
         access = self.provider._issue_token(self.client.client_id, MCP_RESOURCE)
