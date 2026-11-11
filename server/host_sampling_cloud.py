@@ -14,7 +14,7 @@ import host_sampling_core as runtime
 from request_limits import RateLimitedApp
 from inbound_ip_filter import IngressAllowlist
 
-mcp = MCPServer("Omni Host Sampling (Experimental)", version="0.1.0",
+mcp = MCPServer("Omni Host Sampling (Experimental)", version="0.2.0",
     instructions="Sampling needs client support and approval; GPT-6 is a model hint, not a promise.")
 READ = ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=False)
 SPAWN = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False)
@@ -67,8 +67,9 @@ security = TransportSecuritySettings(
 # Only a sessionful MCP connection can deliver 2025-era client sampling replies.
 app = mcp.streamable_http_app(stateless_http=False, json_response=True, transport_security=security)
 app.router.routes.insert(0, Route("/healthz", lambda req: JSONResponse(
-    {"status": "ok", "sampling": "client-required"}), methods=["GET"]))
+    {"status": "ok", "sampling": "client-required", "ingress_feed": ingress.feed_status}), methods=["GET"]))
 app = RateLimitedApp(app, requests_per_minute=50, concurrency=6, max_bytes=16384)
-app = BearerAccess(app, os.getenv("OMNI_AGENT_ACCESS_TOKEN", ""))
-# Application-level CIDR restriction; Render Free does not provide native web-service IP ACLs.
-app = IngressAllowlist(app)
+# Application-level CIDR restriction (including official ChatGPT egress when enabled).
+ingress = IngressAllowlist(app)
+# Check bearer authorization BEFORE any potentially costly feed refresh.
+app = BearerAccess(ingress, os.getenv("OMNI_AGENT_ACCESS_TOKEN", ""))
