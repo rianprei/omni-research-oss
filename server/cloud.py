@@ -21,7 +21,7 @@ def _bounds(v, low, high):
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
 def web_search(query: str, engines: list[str] | None = None, limit: int = 12) -> dict:
-    """Search public web engines with provenance, ranked results and provider errors."""
+    """Search Wikimedia and Google News by default; optional web engines may block automated access."""
     return e.web_search(query,engines,_bounds(limit,1,30))
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True, destructive_hint=False))
@@ -80,8 +80,8 @@ def health_check() -> dict:
     data=e.health()
     # Prevent inadvertently displaying credentials, filesystem paths, user identifiers.
     return {'status':'ok','mode':'cloud-public','public_tools':12,'providers':{
-        'web_default':['duckduckgo','wikipedia'],
-        'web_optional':['duckduckgo','mojeek','searxng'],
+        'web_default':['wikipedia','google-news'],
+        'web_optional':['duckduckgo','bing','mojeek','searxng'],
         'social_default':['hackernews','stackoverflow'],
         'social_optional':['reddit'],
         'academic':['openalex','crossref','arxiv','pubmed'],
