@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import engine as e
+from request_limits import RateLimitedApp
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from mcp.server.transport_security import TransportSecuritySettings
@@ -78,7 +79,14 @@ def health_check() -> dict:
     """Report provider configuration and public API availability, not internal secrets."""
     data=e.health()
     # Prevent inadvertently displaying credentials, filesystem paths, user identifiers.
-    return {'status':'ok','mode':'cloud-public','public_tools':12,'providers':data.get('providers',{}) if isinstance(data,dict) else {}}
+    return {'status':'ok','mode':'cloud-public','public_tools':12,'providers':{
+        'web_default':['bing','wikipedia'],
+        'web_optional':['duckduckgo','mojeek','searxng'],
+        'social_default':['hackernews','stackoverflow'],
+        'social_optional':['reddit'],
+        'academic':['openalex','crossref','arxiv','pubmed'],
+        'code_search_token_configured':bool(data.get('github_token_configured')) if isinstance(data,dict) else False
+    },'notes':'External provider availability and rate limits vary; public HTTP MCP is unauthenticated and globally throttled.'}
 
 # DNS rebinding protection: allow only the deployed hostname, no wildcard domains.
 hostname=os.environ.get('RENDER_EXTERNAL_HOSTNAME','').strip().lower()
@@ -92,4 +100,5 @@ app=mcp.streamable_http_app(stateless_http=True,json_response=True,transport_sec
 from starlette.routing import Route
 from starlette.responses import JSONResponse
 app.router.routes.insert(0,Route('/healthz',lambda request: JSONResponse({'status':'ok'}),methods=['GET']))
+app=RateLimitedApp(app, requests_per_minute=120, concurrency=6, max_bytes=32768)
 
