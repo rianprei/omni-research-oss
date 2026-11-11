@@ -14,6 +14,7 @@ import base64
 import hashlib
 import hmac
 import html
+import json
 import os
 import secrets
 import time
@@ -65,8 +66,57 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         self.access_tokens: dict[str, AccessToken] = {}
         self.failed_logins: list[float] = []
 
+    def _seal(self, prefix: str, payload: dict) -> str:
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        encoded = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+        signature = hmac.new(
+            self.owner_password.encode(), (prefix + "." + encoded).encode(), hashlib.sha256,
+        ).hexdigest()
+        return prefix + "." + encoded + "." + signature
+
+    def _open(self, token: str, prefix: str) -> dict | None:
+        if not token.startswith(prefix + ".") or len(token) > 4096:
+            return None
+        try:
+            _, encoded, signature = token.split(".", 2)
+            mac = hmac.new(
+                self.owner_password.encode(), (prefix + "." + encoded).encode(), hashlib.sha256,
+            ).hexdigest()
+            if not hmac.compare_digest(mac, signature):
+                return None
+            raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                return None
+            return data
+        except (ValueError, UnicodeError, TypeError):
+            return None
+
+    def _client_secret(self, client_id: str) -> str:
+        return hmac.new(
+            self.owner_password.encode(), ("client-secret:" + client_id).encode(), hashlib.sha256,
+        ).hexdigest()
+
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
-        return self.clients.get(client_id)
+        known = self.clients.get(client_id)
+        if known:
+            return known
+        metadata = self._open(client_id, "oc1")
+        if metadata is None:
+            return None
+        try:
+            if not all(_is_chatgpt_callback(x) for x in metadata["redirect_uris"]):
+                return None
+            method = metadata.get("token_endpoint_auth_method", "client_secret_post")
+            return OAuthClientInformationFull.model_validate({
+                **metadata,
+                "client_id": client_id,
+                "client_id_issued_at": metadata.get("registered_at", int(time.time())),
+                "client_secret": self._client_secret(client_id) if method != "none" else None,
+                "client_secret_expires_at": 0 if method != "none" else None,
+            })
+        except Exception:
+            return None
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         if not client_info.client_id:
@@ -75,9 +125,29 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         redirects = client_info.redirect_uris or []
         if not redirects or len(redirects) > 5 or not all(_is_chatgpt_callback(str(x)) for x in redirects):
             raise RegistrationError(error="invalid_redirect_uri", error_description="ChatGPT redirect required")
-        if len(self.clients) >= 24:
-            raise RegistrationError(error="invalid_client_metadata", error_description="Registration capacity exhausted")
-        self.clients[client_info.client_id] = client_info
+        # A signed, public client identifier survives Render Free sleeps; the
+        # confidential client secret is independently derived and NOT encoded
+        # into the client identifier. The signing key is the owner's private key.
+        metadata = client_info.model_dump(
+            mode="json",
+            exclude={"client_id", "client_secret", "client_secret_expires_at", "client_id_issued_at"},
+            exclude_none=True,
+        )
+        if metadata.get("token_endpoint_auth_method") not in ("none", "client_secret_post", "client_secret_basic"):
+            raise RegistrationError(error="invalid_client_metadata", error_description="Unsupported token method")
+        metadata["registered_at"] = int(time.time())
+        new_id = self._seal("oc1", metadata)
+        client_info.client_id = new_id
+        client_info.client_id_issued_at = metadata["registered_at"]
+        if client_info.token_endpoint_auth_method == "none":
+            client_info.client_secret = None
+            client_info.client_secret_expires_at = None
+        else:
+            client_info.client_secret = self._client_secret(new_id)
+            client_info.client_secret_expires_at = 0
+        self.clients[new_id] = client_info
+        if len(self.clients) > 24:
+            self.clients.pop(next(iter(self.clients)))
 
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
         if not _is_chatgpt_callback(str(params.redirect_uri)):
@@ -96,14 +166,12 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         return f"{BASE_URL}/owner/approve?ticket={ticket}"
 
     def _issue_token(self, client_id: str, resource: str | None) -> OAuthToken:
-        value = secrets.token_urlsafe(48)
-        self.access_tokens[value] = AccessToken(
-            token=value, client_id=client_id, scopes=[SCOPE],
-            expires_at=int(time.time()) + TOKEN_LIFETIME,
-            resource=resource or MCP_RESOURCE,
-            subject="omni-owner",
-            claims={"iss": BASE_URL},
-        )
+        now = int(time.time())
+        value = self._seal("oa1", {
+            "client_id": client_id, "scopes": [SCOPE], "iat": now,
+            "exp": now + TOKEN_LIFETIME, "resource": resource or MCP_RESOURCE,
+            "subject": "omni-owner",
+        })
         return OAuthToken(
             access_token=value, token_type="Bearer",
             expires_in=TOKEN_LIFETIME, scope=SCOPE,
@@ -122,11 +190,23 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         return self._issue_token(original.client_id, original.resource)
 
     async def load_access_token(self, token: str) -> AccessToken | None:
-        record = self.access_tokens.get(token)
-        if record and record.expires_at and record.expires_at > time.time():
-            return record
-        self.access_tokens.pop(token, None)
-        return None
+        payload = self._open(token, "oa1")
+        if not payload or not isinstance(payload.get("exp"), int):
+            return None
+        if payload["exp"] <= int(time.time()) or payload.get("resource") != MCP_RESOURCE:
+            return None
+        if payload.get("scopes") != [SCOPE] or payload.get("subject") != "omni-owner":
+            return None
+        if not isinstance(payload.get("client_id"), str):
+            return None
+        try:
+            return AccessToken(
+                token=token, client_id=payload["client_id"], scopes=[SCOPE],
+                expires_at=payload["exp"], resource=MCP_RESOURCE,
+                subject="omni-owner", claims={"iss": BASE_URL},
+            )
+        except Exception:
+            return None
 
     async def load_refresh_token(self, client: OAuthClientInformationFull, refresh_token: str) -> RefreshToken | None:
         return None
@@ -135,7 +215,8 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         raise TokenError(error="invalid_grant", error_description="Refresh not supported; reconnect")
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
-        self.access_tokens.pop(token.token, None)
+        # Stateless owner tokens are revoked globally by rotating OMNI_AGENT_ACCESS_TOKEN.
+        return None
 
     def _pending_ticket(self, ticket: str) -> Pending | None:
         pending = self.pending.get(ticket)
