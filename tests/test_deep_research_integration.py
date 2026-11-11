@@ -19,7 +19,7 @@ def declared_versions():
 
     cloud = (ROOT / 'server' / 'cloud.py').read_text(encoding='utf-8')
     versions['server/cloud.py'] = re.search(
-        r'version\\s*=\\s*["\\\']([0-9.]+)["\\\']', cloud
+        r'version\s*=\s*"([0-9.]+)"', cloud
     ).group(1)
 
     main = (ROOT / 'server' / 'main.py').read_text(encoding='utf-8')
