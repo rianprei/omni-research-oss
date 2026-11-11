@@ -111,6 +111,12 @@ def main():
     callback=head["Location"]
     assert callback.startswith(CALLBACK),callback
     code=urllib.parse.parse_qs(urllib.parse.urlsplit(callback).query)["code"][0]
+    # The browser may repost the form: repeat must return the exact redirect,
+    # not an expired-ticket error or a second OAuth authorization code.
+    repeated, repeated_headers, raw=req(
+        "/owner/approve", "POST", {"ticket":ticket,"password":OWNER}, form=True
+    )
+    assert repeated==303 and repeated_headers["Location"]==callback,(repeated,raw)
     token_path=urllib.parse.urlsplit(meta["token_endpoint"]).path
     status,_,raw=req(token_path,"POST",{
         "grant_type":"authorization_code","client_id":client_id,
@@ -119,6 +125,10 @@ def main():
         "resource":MCP},form=True)
     assert status==200,(status,raw)
     token=js(raw)["access_token"]
+    post_exchange, _, response=req(
+        "/owner/approve", "POST", {"ticket":ticket,"password":OWNER}, form=True
+    )
+    assert post_exchange==200 and "Autorização concluída" in response.decode(), (post_exchange,response)
     status,result=mcp_call(token,"initialize",11,{"protocolVersion":"2025-06-18",
         "capabilities":{},"clientInfo":{"name":"OAuth CI","version":"1"}})
     assert status==200 and result["result"]["serverInfo"]["name"]=="Omni Host Sampling (Experimental)",(status,result)
