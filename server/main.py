@@ -71,7 +71,7 @@ def handle(req):
     if method=='initialize':
         offered=req.get('params',{}).get('protocolVersion','2025-06-18')
         proto=offered if offered in ('2024-11-05','2025-03-26','2025-06-18','2025-11-25') else '2025-06-18'
-        return {'protocolVersion':proto,'capabilities':{'tools':{'listChanged':False}},'serverInfo':{'name':'omni-research-oss','version':'1.2.0'}}
+        return {'protocolVersion':proto,'capabilities':{'tools':{'listChanged':False}},'serverInfo':{'name':'omni-research-oss','version':'1.3.0'}}
     if method=='ping':return {}
     if method=='tools/list':return {'tools':TOOLS}
     if method=='tools/call':
