@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 import host_sampling_core as runtime
 from request_limits import RateLimitedApp
+from inbound_ip_filter import IngressAllowlist
 
 mcp = MCPServer("Omni Host Sampling (Experimental)", version="0.1.0",
     instructions="Sampling needs client support and approval; GPT-6 is a model hint, not a promise.")
@@ -69,3 +70,5 @@ app.router.routes.insert(0, Route("/healthz", lambda req: JSONResponse(
     {"status": "ok", "sampling": "client-required"}), methods=["GET"]))
 app = RateLimitedApp(app, requests_per_minute=50, concurrency=6, max_bytes=16384)
 app = BearerAccess(app, os.getenv("OMNI_AGENT_ACCESS_TOKEN", ""))
+# Application-level CIDR restriction; Render Free does not provide native web-service IP ACLs.
+app = IngressAllowlist(app)

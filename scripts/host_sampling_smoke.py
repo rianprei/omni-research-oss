@@ -9,15 +9,17 @@ headers={
     "content-type":"application/json",
     "accept":"application/json, text/event-stream",
     "mcp-protocol-version":"2025-06-18",
+    "cf-connecting-ip":"74.220.49.21",  # Cloudflare would set this on Render.
 }
 session=None
-def rpc(method, id, params=None, authorized=True, notification=False):
+def rpc(method, id, params=None, authorized=True, notification=False, blocked_ip=False):
     global session
     data={"jsonrpc":"2.0","method":method}
     if not notification: data["id"]=id
     if params is not None:data["params"]=params
     h=dict(headers)
     if not authorized:h.pop("authorization",None)
+    if blocked_ip:h["cf-connecting-ip"]="203.0.113.1"
     if session:h["mcp-session-id"]=session
     req=urllib.request.Request(BASE,data=json.dumps(data).encode(),headers=h,method="POST")
     try:
@@ -48,6 +50,9 @@ def result_data(response):
     return {}
 
 def main():
+    forbidden=rpc("initialize",776,{"protocolVersion":"2025-06-18","capabilities":{},
+       "clientInfo":{"name":"blocked","version":"0.1"}},blocked_ip=True)
+    assert forbidden=={"http_error":403},forbidden
     unauth=rpc("initialize",777,{"protocolVersion":"2025-06-18","capabilities":{},
        "clientInfo":{"name":"offline","version":"0.1"}},authorized=False)
     assert unauth=={"http_error":401},unauth
@@ -65,7 +70,7 @@ def main():
     assert spawned["error"]=="HOST_SAMPLING_UNSUPPORTED" and spawned["agents_started"]==0,spawned
     missing=result_data(rpc("tools/call",5,{"name":"task","arguments":{"task_id":"missing"}}))
     assert missing["error"]=="TASK_NOT_FOUND_OR_RESTARTED",missing
-    print("HOST_SAMPLING_MCP_PASS",json.dumps({"tools":sorted(names),"unauthorized":401,
+    print("HOST_SAMPLING_MCP_PASS",json.dumps({"tools":sorted(names),"unauthorized":401,"blocked_ip":403,
         "sampling_advertised":False,"spawned":0,"model_calls":0}),flush=True)
 
 if __name__=="__main__":
