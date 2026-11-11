@@ -15,6 +15,7 @@ import host_sampling_core as runtime
 from request_limits import RateLimitedApp
 from inbound_ip_filter import IngressAllowlist
 from owner_oauth import OwnerOAuthProvider, BASE_URL, MCP_RESOURCE
+from oauth_issuer_identification import OAuthIssuerIdentification
 
 # An HTTPS OAuth 2.1 authorization server and protected resource are hosted together.
 # ChatGPT cannot send a custom static API key; it must complete authorization code + PKCE.
@@ -80,3 +81,5 @@ app = RateLimitedApp(app, requests_per_minute=50, concurrency=6, max_bytes=16384
 # Only /mcp ingress is filtered; MCP's own OAuth middleware verifies access tokens.
 ingress = IngressAllowlist(app)
 app = ingress
+# RFC 9207 issuer identification enables ChatGPT's stable OAuth callback.
+app = OAuthIssuerIdentification(app, issuer=BASE_URL)
