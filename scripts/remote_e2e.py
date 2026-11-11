@@ -88,7 +88,7 @@ def summarize(name,result,seconds):
     if name.startswith("fetch_source"): count=1 if data.get("text") and data.get("url") else 0
     if name=="citation_lookup": count=1 if data.get("doi") and data.get("title") else 0
     if name=="health_check":
-        count=1 if data.get("status")=="ok" and data.get("providers",{}).get("web_default")==["duckduckgo","wikipedia"] else 0
+        count=1 if data.get("status")=="ok" and data.get("providers",{}).get("web_default")==["wikipedia","google-news"] else 0
     status="PASS" if count is None or count>0 else "DEGRADED"
     if data_errors and count==0: status="DEGRADED"
     if name=="code_search/tokenless" and data.get("error"):status="EXPECTED_LIMIT"
@@ -147,7 +147,7 @@ def main():
     problems=[x for x in results if x["status"] in ("ERROR","DEGRADED")]+[x for x in neg if x["status"]!="PASS"]
     print("SUMMARY",json.dumps({"tested":len(results),"successful":sum(x["status"]=="PASS" for x in results),"degraded":sum(x["status"]=="DEGRADED" for x in results),"errors":sum(x["status"]=="ERROR" for x in results),"negative_pass":sum(x["status"]=="PASS" for x in neg),"problems":problems},ensure_ascii=False),flush=True)
     by_name={x["tool"]:x["status"] for x in results}
-    for mandatory in ("health_check","fetch_source","fetch_source/pdf","web_search/duckduckgo"):
+    for mandatory in ("health_check","fetch_source","fetch_source/pdf","web_search/default"):
         assert by_name.get(mandatory)=="PASS",(mandatory,by_name.get(mandatory))
     assert all(x["status"]=="PASS" for x in neg),"Negative security regression!"
     assert not any(x["status"]=="ERROR" and x["tool"] in ("health_check","fetch_source","map_website","compare_evidence") for x in results),"Basic MCP tools failed!"
