@@ -71,7 +71,7 @@ def main():
                   "clientInfo":{"name":"ci","version":"1"}}},
         extra={"CF-Connecting-IP":"74.220.49.23"})
     assert status==401, (status,raw)
-    challenge=headers.get("WWW-Authenticate","")
+    challenge={k.lower():v for k,v in headers.items()}.get("www-authenticate","")
     assert "Bearer" in challenge,headers
     status,_,raw=req("/.well-known/oauth-protected-resource/mcp")
     assert status==200,(status,raw)
