@@ -1,0 +1,46 @@
+name: OmniAgents MCP CI
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/agent_*.py'
+      - 'scripts/agent_smoke.py'
+      - 'tests/test_agent_runtime.py'
+      - '.github/workflows/agents-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/agent_*.py'
+      - 'scripts/agent_smoke.py'
+      - 'tests/test_agent_runtime.py'
+      - '.github/workflows/agents-ci.yml'
+permissions:
+  contents: read
+jobs:
+  agent-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements-cloud.txt
+      - name: Static and runtime unit tests
+        run: |
+          python -m compileall -q server/agent_runtime.py server/agent_cloud.py scripts/agent_smoke.py
+          python -m unittest discover -s tests -p test_agent_runtime.py -v
+      - name: Start authenticated MCP and test real protocol
+        env:
+          OMNI_AGENT_ACCESS_TOKEN: 'ci-test-only-authorization-token-000000000000'
+          RENDER_EXTERNAL_HOSTNAME: '127.0.0.1'
+        run: |
+          set -euo pipefail
+          python -m uvicorn server.agent_cloud:app --host 127.0.0.1 --port 8799 > /tmp/omni-agent-uvicorn.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" || true' EXIT
+          for n in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:8799/healthz >/dev/null; then break; fi
+            sleep .2
+          done
+          python scripts/agent_smoke.py
