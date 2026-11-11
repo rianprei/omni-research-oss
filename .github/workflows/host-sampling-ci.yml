@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'server/host_sampling_*.py'
+      - 'server/inbound_ip_filter.py'
+      - 'tests/test_inbound_ip_filter.py'
       - 'tests/test_host_sampling_core.py'
       - 'scripts/host_sampling_smoke.py'
       - '.github/workflows/host-sampling-ci.yml'
@@ -11,6 +13,8 @@ on:
     branches: [main]
     paths:
       - 'server/host_sampling_*.py'
+      - 'server/inbound_ip_filter.py'
+      - 'tests/test_inbound_ip_filter.py'
       - 'tests/test_host_sampling_core.py'
       - '.github/workflows/host-sampling-ci.yml'
 permissions:
@@ -28,7 +32,8 @@ jobs:
         run: pip install -r requirements-cloud.txt
       - name: Check code and run tests without any model credential
         run: |
-          python -m compileall -q server/host_sampling_core.py server/host_sampling_cloud.py
+          python -m compileall -q server/host_sampling_core.py server/host_sampling_cloud.py server/inbound_ip_filter.py
+          python -m unittest discover -s tests -p 'test_inbound_ip_filter.py' -v
           python -m unittest discover -s tests -p 'test_host_sampling_core.py' -v
       - name: Verify MCP app imports (requires bearer config)
         env:
