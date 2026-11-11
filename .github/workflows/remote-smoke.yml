@@ -4,6 +4,11 @@ on:
     paths:
       - '.github/workflows/remote-smoke.yml'
   workflow_dispatch:
+  schedule:
+    # Daily revalidation of the live service. The free-tier Render instance
+    # sleeps when idle and can be redeployed, so the endpoint has to be
+    # re-checked continuously rather than only when this file changes.
+    - cron: '17 6 * * *'
 jobs:
   verify-remote:
     runs-on: ubuntu-latest
