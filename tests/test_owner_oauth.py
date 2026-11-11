@@ -6,9 +6,14 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
-from mcp.server.auth.provider import AuthorizationParams, AuthorizeError, RegistrationError
-from mcp.shared.auth import OAuthClientInformationFull
-from starlette.requests import Request
+# The regular offline test job does not install the optional MCP cloud SDK.
+# Dedicated host-sampling CI installs it and tests all OAuth behavior.
+try:
+    from mcp.server.auth.provider import AuthorizationParams, AuthorizeError, RegistrationError
+    from mcp.shared.auth import OAuthClientInformationFull
+    from starlette.requests import Request
+except ImportError:
+    raise unittest.SkipTest("Optional MCP cloud SDK not installed")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 from owner_oauth import OwnerOAuthProvider, MCP_RESOURCE, _is_chatgpt_callback
