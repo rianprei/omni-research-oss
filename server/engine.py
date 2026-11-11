@@ -206,6 +206,10 @@ def web_engine(query, engine, limit=10):
         else:
             raise ValueError('SearXNG requires public HTTPS or explicitly configured loopback HTTP')
         return [dict(title=r.get('title',''),url=r.get('url',''),snippet=r.get('content',''),source='searxng') for r in data.get('results',[])[:limit]]
+    elif engine=='google-news':
+        # Public RSS is reliable on cloud hosting; articles are time-sensitive
+        # news discovery, not a general-purpose web index.
+        return news_search(query,limit=limit)['results']
     elif engine=='wikipedia':
         data=jget('https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srsearch='+q+'&srlimit='+str(limit))
         return [dict(title=x['title'],url='https://en.wikipedia.org/wiki/'+up.quote(x['title'].replace(' ','_')),snippet=clean_html(x.get('snippet',''))[0],source='wikipedia') for x in data.get('query',{}).get('search',[])]
@@ -235,8 +239,8 @@ def normalize(items):
 
 
 def web_search(query, engines=None, limit=12):
-    engines=engines or ['duckduckgo','wikipedia']
-    engines=[x for x in engines if x in ('duckduckgo','bing','mojeek','wikipedia','searxng')]
+    engines=engines or ['wikipedia','google-news']
+    engines=[x for x in engines if x in ('duckduckgo','bing','mojeek','wikipedia','google-news','searxng')]
     if not engines: raise ValueError('No valid search engines')
     key=json.dumps(['web',query,engines,limit]); cached=_cache_get(key)
     if cached is not None: return cached
@@ -514,4 +518,4 @@ def search_notes(query,limit=10):
 
 
 def health():
-    return {'name':'OmniResearch OSS','version':'1.3.0','python':'stdlib only (optional pypdf for PDF)','state_dir':str(STATE_DIR),'web_engines':['duckduckgo','bing','mojeek','wikipedia']+(['searxng'] if os.getenv('OMNI_SEARXNG_URL') else []),'free_sources':['OpenAlex','Crossref','arXiv','PubMed','GitHub repositories/issues','HN Algolia','Stack Exchange','Reddit public','Google News RSS','Hugging Face','Zenodo'],'github_token_configured':bool(os.getenv('GITHUB_TOKEN')),'searxng_configured':bool(os.getenv('OMNI_SEARXNG_URL')),'disclaimer':'Public providers impose rate limits, can block bots, and may change APIs.'}
+    return {'name':'OmniResearch OSS','version':'1.3.0','python':'stdlib only (optional pypdf for PDF)','state_dir':str(STATE_DIR),'web_engines':['wikipedia','google-news','duckduckgo','bing','mojeek']+(['searxng'] if os.getenv('OMNI_SEARXNG_URL') else []),'free_sources':['OpenAlex','Crossref','arXiv','PubMed','GitHub repositories/issues','HN Algolia','Stack Exchange','Reddit public','Google News RSS','Hugging Face','Zenodo'],'github_token_configured':bool(os.getenv('GITHUB_TOKEN')),'searxng_configured':bool(os.getenv('OMNI_SEARXNG_URL')),'disclaimer':'Public providers impose rate limits, can block bots, and may change APIs.'}
