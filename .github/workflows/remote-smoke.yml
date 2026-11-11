@@ -1,0 +1,46 @@
+name: Remote MCP smoke
+on:
+  push:
+    paths:
+      - '.github/workflows/remote-smoke.yml'
+  workflow_dispatch:
+jobs:
+  verify-remote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify health endpoint
+        run: |
+          curl -fsSL --retry 4 --retry-delay 8 --retry-all-errors --max-time 75 \
+            https://omni-research-oss-mcp.onrender.com/healthz | python3 -c \
+            'import sys,json; d=json.load(sys.stdin); assert d["status"]=="ok", d; print(d)'
+      - name: MCP protocol initialization and tool inventory
+        run: |
+          python3 - <<'PY'
+          import urllib.request, json
+          url = "https://omni-research-oss-mcp.onrender.com/mcp"
+          headers = {"Content-Type":"application/json",
+                     "Accept":"application/json, text/event-stream",
+                     "MCP-Protocol-Version":"2025-06-18"}
+          def call(method, ident, params=None):
+              request = {"jsonrpc":"2.0","id":ident,"method":method}
+              if params is not None: request["params"] = params
+              req = urllib.request.Request(url, data=json.dumps(request).encode(), headers=headers, method="POST")
+              with urllib.request.urlopen(req, timeout=90) as response:
+                  raw = response.read().decode()
+                  typ = response.headers.get("Content-Type","")
+              if "text/event-stream" in typ:
+                  lines = [line[6:] for line in raw.splitlines() if line.startswith("data: ")]
+                  if not lines: raise RuntimeError("Empty MCP event stream")
+                  raw = lines[-1]
+              data = json.loads(raw)
+              if "error" in data: raise RuntimeError(data)
+              return data["result"]
+          init = call("initialize",1,{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"omni-remote-smoke","version":"0.1"}})
+          print("MCP initialize:",init.get("serverInfo"),init.get("protocolVersion"))
+          tools=call("tools/list",2).get("tools",[])
+          names={t["name"] for t in tools}
+          expected={"web_search","academic_search","code_search","social_search","news_search","dataset_search","fetch_source","map_website","compare_evidence","research_bundle","citation_lookup","health_check"}
+          assert names==expected,(len(names), sorted(names), sorted(expected-names))
+          print("MCP tool inventory:",len(names),sorted(names))
+          PY
