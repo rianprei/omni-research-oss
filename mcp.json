@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "omni-research-oss": {
+      "type": "streamable-http",
+      "url": "https://omni-research-oss-mcp.onrender.com/mcp"
+    }
+  }
+}

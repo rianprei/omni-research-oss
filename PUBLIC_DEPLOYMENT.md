@@ -2,6 +2,20 @@
 
 This is a candidate, **not a published or connected ChatGPT plugin**.
 
+## Live endpoint
+
+The service is deployed and verified:
+
+| Item | Value |
+|------|-------|
+| Host | `omni-research-oss-mcp.onrender.com` |
+| Health | `https://omni-research-oss-mcp.onrender.com/healthz` → `{"status":"ok"}` |
+| MCP | `https://omni-research-oss-mcp.onrender.com/mcp` (`streamable-http`) |
+| Server | `OmniResearch OSS` v1.3.0, protocol `2025-06-18` |
+| Tools | exactly the 12 public ones; `read_document`, `memory_save` and `memory_search` are **not** exposed |
+
+The remote smoke test in `.github/workflows/remote-smoke.yml` re-checks the health route, the MCP handshake and the full tool inventory against the live endpoint on every change to that workflow. Free-tier instances sleep after inactivity, so the first request after a quiet period is slow; that is a plan limitation, not a service fault.
+
 The source is published at **<https://github.com/rianprei/omni-research-oss>** (branch `main`).
 The `render.yaml` Blueprint in this repository is the deployment definition.
 
@@ -26,7 +40,7 @@ The `render.yaml` Blueprint in this repository is the deployment definition.
    ```
 
    `tools/list` must return exactly the **12** public tools. `read_document`, `memory_save` and `memory_search` must be absent.
-5. **Add the verified endpoint to the submission copy of `mcp.json`** using `type: streamable-http` and the real hostname. `mcp.json` is deliberately **not** committed to this repository: publishing an invented URL would be wrong, and the file must only exist once the endpoint answers.
+5. **Add the verified endpoint to the submission copy of `mcp.json`** using `type: streamable-http` and the real hostname. `mcp.json` must only ever hold a URL that has actually answered — `scripts/deploy_render.sh` writes it as its last step, after the probes pass.
 6. **Submit.** Confirm the OAuth/authentication policy with the OpenAI Developer Portal, complete the required listing URLs, identity verification, evidence, demo and review cases, then submit for approval. Public listing is never automatic.
 
 ### Render API alternative
@@ -48,7 +62,7 @@ Free instances sleep after inactivity and the first request after a sleep is slo
 - The public server offers 12 research-related read-only tools. Original local-only `read_document`, `memory_save`, and `memory_search` are **not** exposed across public sessions.
 - This prevents untrusted users reading local files or shared notes; to restore all 15 tools publicly, add OAuth-based per-user authorization and isolated persistent storage. This is not done in this candidate.
 - The cloud service uses a public web endpoint, HTTPS supplied by Render, no third-party premium API key required. Service traffic and LLM calls may still incur charges or free-tier limits.
-- `mcp.json` is deliberately absent because no endpoint has been deployed and verified. Do not publish with an invented URL.
+- `mcp.json` carries the verified endpoint. It was written only after the endpoint answered; do not replace it with an invented URL.
 - Some providers are scraped or rate-limited; sources can be inaccessible. The skill-based agent coordination relies on the host's support, it is not an embedded remote model.
 - No guarantee of a deployed Render service, review acceptance or publicly listed plugin at this stage.
 

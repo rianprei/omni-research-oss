@@ -20,7 +20,7 @@
 | `tests/` | Offline unit and integration tests |
 | `fixtures/` | Sample evidence fixture used by tests and demos |
 
-The cloud edition is a **candidate**. It is neither a deployed service nor an approved or listed plugin. See [PUBLIC_DEPLOYMENT.md](PUBLIC_DEPLOYMENT.md) and [Submission status](#cloud-submission-status).
+The cloud edition is **deployed and verified** at `https://omni-research-oss-mcp.onrender.com` (12 read-only tools). It is still **not** an approved or publicly listed plugin. See [PUBLIC_DEPLOYMENT.md](PUBLIC_DEPLOYMENT.md) and [Submission status](#cloud-submission-status).
 
 ## Features
 
@@ -78,7 +78,7 @@ Each skill directory must contain `SKILL.md` at its root. Restart the agent sess
 
 Deploy the `render.yaml` Blueprint on a free Render instance, then point the Agent Plugins manifest at the verified HTTPS endpoint with `type: streamable-http`. Full procedure: [PUBLIC_DEPLOYMENT.md](PUBLIC_DEPLOYMENT.md).
 
-`mcp.json` is deliberately **not** shipped in this package: no endpoint has been deployed and verified yet, and publishing an invented URL would be wrong.
+The deployed endpoint is `https://omni-research-oss-mcp.onrender.com`, and `mcp.json` in this repository points at it with `type: streamable-http`. The endpoint was verified before the file was created; the file only ever holds a URL that has actually answered. `scripts/deploy_render.sh` performs the whole sequence — create the service, wait for a live deploy, probe `/healthz` and the MCP endpoint, assert that exactly 12 public tools are exposed and none of the three local-only ones, and only then write `mcp.json`.
 
 ## Available tools
 
@@ -160,7 +160,7 @@ This package is a **candidate**, not an approved or published plugin.
 
 - The public service exposes 12 read-only research tools. The three local-only tools are withheld from the public service pending authenticated per-user isolation.
 - The service uses a public web endpoint with HTTPS supplied by Render, and no third-party premium API key is required. Service traffic and LLM calls may still incur charges or free-tier limits.
-- `mcp.json` is deliberately absent because no endpoint has been deployed and verified. Do not publish with an invented URL.
+- `mcp.json` now carries the verified endpoint `https://omni-research-oss-mcp.onrender.com/mcp`. It was created only after the endpoint answered `/healthz` and returned exactly the 12 public tools.
 - Some providers are scraped or rate-limited; sources can be inaccessible. The skill-based agent coordination relies on the host's support, it is not an embedded remote model.
 - Public listing must use the publisher's *verified* identity. This package intentionally omits unverified HTTPS website, support, privacy and terms URLs, a nonexistent demo recording URL and unconfirmed geographic/commerce declarations. The current `developerName` is the project's legacy label, **not proof of verified identity**.
 - There is no guarantee of a deployed Render service, review acceptance or publicly listed plugin at this stage.
