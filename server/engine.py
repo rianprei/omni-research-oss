@@ -175,7 +175,7 @@ def items_from_html(body: str, engine: str, limit=12):
         if host.endswith(('duckduckgo.com','bing.com','google.com')): continue
         # DuckDuckGo's results use result__a; Bing uses organic result headings,
         # other engines have no guaranteed markup. Treat results as unverified.
-        if engine=='duckduckgo' and 'result__a' not in link['class']: continue
+        if engine=='duckduckgo' and not any(mark in link['class'] for mark in ('result__a','result-link')): continue
         if len(link['title'])<9: continue
         out.append({'title':link['title'][:200], 'url':href,'snippet':'', 'source':engine})
         if len(out)>=limit: break
@@ -185,7 +185,7 @@ def items_from_html(body: str, engine: str, limit=12):
 def web_engine(query, engine, limit=10):
     q=up.quote_plus(query)
     if engine=='duckduckgo':
-        url=f'https://html.duckduckgo.com/html/?q={q}'
+        url=f'https://lite.duckduckgo.com/lite/?q={q}'
     elif engine=='bing':
         url=f'https://www.bing.com/search?q={q}&count={min(limit,30)}'
     elif engine=='mojeek':
@@ -235,7 +235,7 @@ def normalize(items):
 
 
 def web_search(query, engines=None, limit=12):
-    engines=engines or ['bing','wikipedia']
+    engines=engines or ['duckduckgo','wikipedia']
     engines=[x for x in engines if x in ('duckduckgo','bing','mojeek','wikipedia','searxng')]
     if not engines: raise ValueError('No valid search engines')
     key=json.dumps(['web',query,engines,limit]); cached=_cache_get(key)

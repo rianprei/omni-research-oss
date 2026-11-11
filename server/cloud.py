@@ -80,7 +80,7 @@ def health_check() -> dict:
     data=e.health()
     # Prevent inadvertently displaying credentials, filesystem paths, user identifiers.
     return {'status':'ok','mode':'cloud-public','public_tools':12,'providers':{
-        'web_default':['bing','wikipedia'],
+        'web_default':['duckduckgo','wikipedia'],
         'web_optional':['duckduckgo','mojeek','searxng'],
         'social_default':['hackernews','stackoverflow'],
         'social_optional':['reddit'],
