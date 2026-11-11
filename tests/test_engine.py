@@ -71,7 +71,11 @@ class ProtocolTest(unittest.TestCase):
         self.assertEqual(p.returncode,0,p.stderr)
         data=[json.loads(x) for x in p.stdout.splitlines()]
         self.assertEqual(len(data),3)
-        self.assertGreaterEqual(len(data[1]['result']['tools']),15)
+        self.assertEqual(len(data[1]['result']['tools']),9)
+        names={x['name'] for x in data[1]['result']['tools']}
+        self.assertIn('omni_research-deep',names)
+        self.assertNotIn('web_search',names)
+        self.assertNotIn('research_bundle',names)
         self.assertIn('structuredContent',data[2]['result'])
 
 if __name__=='__main__': unittest.main()
