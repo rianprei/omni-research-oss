@@ -34,7 +34,7 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response
 BASE_URL = os.environ.get("OMNI_AGENT_PUBLIC_URL", "https://omni-host-sampling-mcp.onrender.com").rstrip("/")
 MCP_RESOURCE = BASE_URL + "/mcp"
 SCOPE = "mcp"
-PENDING_LIFETIME = 300
+PENDING_LIFETIME = 900
 TOKEN_LIFETIME = 43200
 
 
@@ -56,6 +56,13 @@ class Pending:
     expires_at: float
 
 
+@dataclass
+class Approved:
+    redirect_uri: str
+    authorization_code: str
+    expires_at: float
+
+
 class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]):
     def __init__(self, owner_password: str):
         if len(owner_password) < 32:
@@ -63,6 +70,7 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         self.owner_password = owner_password
         self.clients: dict[str, OAuthClientInformationFull] = {}
         self.pending: dict[str, Pending] = {}
+        self.approved: dict[str, Approved] = {}
         self.codes: dict[str, AuthorizationCode] = {}
         self.access_tokens: dict[str, AccessToken] = {}
         self.failed_logins: list[float] = []
@@ -226,11 +234,30 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
             return None
         return pending
 
+    def _approved_ticket(self, ticket: str) -> Approved | None:
+        approved = self.approved.get(ticket)
+        if approved and approved.expires_at > time.time():
+            return approved
+        self.approved.pop(ticket, None)
+        return None
+
+    @staticmethod
+    def _already_approved_page() -> Response:
+        return HTMLResponse(
+            "<!doctype html><html lang='pt-BR'><meta charset='utf-8'>"
+            "<title>Autorização concluída</title><h1>Autorização concluída</h1>"
+            "<p>O pedido já foi aprovado. Retorne ao ChatGPT para continuar. "
+            "Caso a conexão não tenha sido concluída, reinicie-a pelo ChatGPT.</p></html>",
+            headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+        )
+
     async def approval_page(self, request: Request) -> Response:
         ticket = request.query_params.get("ticket", "")
         pending = self._pending_ticket(ticket)
         if not pending:
-            return HTMLResponse("Authorization request expired; start connecting again.", status_code=400)
+            if self._approved_ticket(ticket):
+                return self._already_approved_page()
+            return HTMLResponse("Solicitação expirada. Inicie uma nova conexão pelo ChatGPT.", status_code=400)
         # Only self-generated ticket and fixed text appear in HTML.
         safe_ticket = html.escape(ticket, quote=True)
         doc = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
@@ -267,11 +294,25 @@ nunca ao ChatGPT. Não forneça a chave no chat.</p>
         ticket = params.get("ticket", [""])[0]
         password = params.get("password", [""])[0]
         pending = self._pending_ticket(ticket)
-        if not pending:
-            return HTMLResponse("Solicitação expirada ou inválida.", status_code=400)
+        approved = self._approved_ticket(ticket)
+        if not pending and not approved:
+            return HTMLResponse(
+                "Solicitação expirada. Reinicie a conexão no ChatGPT para gerar um novo pedido.",
+                status_code=400,
+            )
+        # Check the owner's password even when returning a prior approval result.
         if not hmac.compare_digest(password.encode(), self.owner_password.encode()):
             self.failed_logins.append(now)
             return HTMLResponse("Chave incorreta. Volte e tente novamente.", status_code=403)
+        if approved:
+            # The OAuth code itself remains one-time use. Reposting an already
+            # approved form must not mislead the owner with an "expired" error.
+            if approved.authorization_code in self.codes:
+                return RedirectResponse(
+                    approved.redirect_uri, status_code=303,
+                    headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+                )
+            return self._already_approved_page()
         self.pending.pop(ticket, None)
         client, auth = pending.client, pending.params
         code = AuthorizationCode(
@@ -287,6 +328,16 @@ nunca ao ChatGPT. Não forneça a chave no chat.</p>
         )
         self.codes[code.code] = code
         redirect = construct_redirect_uri(str(auth.redirect_uri), code=code.code, state=auth.state)
+        # The human browser may resend the same form after a successful 303.
+        # Cache only the redirect; never mint a second authorization code.
+        self.approved[ticket] = Approved(
+            redirect_uri=redirect, authorization_code=code.code,
+            expires_at=now + PENDING_LIFETIME,
+        )
+        if len(self.approved) > 100:
+            self.approved = {
+                k: v for k, v in self.approved.items() if v.expires_at > now
+            }
         return RedirectResponse(redirect, status_code=303, headers={
             "Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
         })
