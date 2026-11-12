@@ -81,5 +81,8 @@ app = RateLimitedApp(app, requests_per_minute=50, concurrency=6, max_bytes=16384
 # Only /mcp ingress is filtered; MCP's own OAuth middleware verifies access tokens.
 ingress = IngressAllowlist(app)
 app = ingress
-# RFC 9207 issuer identification enables ChatGPT's stable OAuth callback.
-app = OAuthIssuerIdentification(app, issuer=BASE_URL)
+# RFC 9207 caused the live ChatGPT connector to stop before /authorize.
+# Compatibility default: use the previously observed callback-ID-specific flow.
+# Re-enable only after ChatGPT confirms stable-callback support for this plugin.
+if os.getenv("OMNI_OAUTH_RFC9207_ENABLED", "0") == "1":
+    app = OAuthIssuerIdentification(app, issuer=BASE_URL)
