@@ -4,9 +4,10 @@ The existing OMNI_AGENT_ACCESS_TOKEN is used ONLY as a password in the
 owner's HTTPS consent page. ChatGPT never receives that password. All
 MCP bearer tokens are newly minted, scoped, short-lived OAuth access tokens.
 
-This is a single-owner, process-local authorization server. Registering
-OAuth clients, pending approvals and tokens do not survive Render restarts.
-Use durable identity/storage for multi-user production deployments.
+This is a single-owner authorization server. Signed DCR clients and access/
+refresh tokens survive restarts while the owner secret is unchanged. Pending
+consent requests and one-time authorization codes remain process-local.
+For production multi-user authorization, use a durable identity provider.
 """
 from __future__ import annotations
 
@@ -36,6 +37,8 @@ MCP_RESOURCE = BASE_URL + "/mcp"
 SCOPE = "mcp"
 PENDING_LIFETIME = 900
 TOKEN_LIFETIME = 43200
+REFRESH_LIFETIME = 30 * 24 * 3600
+OFFLINE_SCOPE = "offline_access"
 
 
 def _is_chatgpt_callback(url: str) -> bool:
@@ -77,6 +80,8 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         self.codes: dict[str, AuthorizationCode] = {}
         self.access_tokens: dict[str, AccessToken] = {}
         self.failed_logins: list[float] = []
+        # Rotation/revocation cache is best effort: it is reset on Render restart.
+        self._spent_refresh: dict[str, float] = {}
 
     def _seal(self, prefix: str, payload: dict) -> str:
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -140,6 +145,16 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         # A signed, public client identifier survives Render Free sleeps; the
         # confidential client secret is independently derived and NOT encoded
         # into the client identifier. The signing key is the owner's private key.
+        # Advertise refresh grant for registered clients. Keep access scoped to
+        # the same mcp resource and require owner consent for first issuance.
+        grants = list(client_info.grant_types or ["authorization_code"])
+        if "refresh_token" not in grants:
+            grants.append("refresh_token")
+        client_info.grant_types = grants
+        granted_scopes = set((client_info.scope or SCOPE).split())
+        if SCOPE not in granted_scopes:
+            raise RegistrationError(error="invalid_client_metadata", error_description="mcp scope required")
+        client_info.scope = " ".join([SCOPE, OFFLINE_SCOPE])
         metadata = client_info.model_dump(
             mode="json",
             exclude={"client_id", "client_secret", "client_secret_expires_at", "client_id_issued_at"},
@@ -166,7 +181,7 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
             raise AuthorizeError(error="invalid_request", error_description="Unrecognized callback")
         if params.resource not in (None, MCP_RESOURCE):
             raise AuthorizeError(error="invalid_target", error_description="Unrecognized resource")
-        if params.scopes and (set(params.scopes) - {SCOPE}):
+        if params.scopes and (set(params.scopes) - {SCOPE, OFFLINE_SCOPE}):
             raise AuthorizeError(error="invalid_scope", error_description="Only mcp scope is permitted")
         if len(self.pending) > 100:
             now = time.time()
@@ -177,16 +192,31 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         self.pending[ticket] = Pending(client, params, time.time() + PENDING_LIFETIME)
         return f"{BASE_URL}/owner/approve?ticket={ticket}"
 
-    def _issue_token(self, client_id: str, resource: str | None) -> OAuthToken:
+    def _issue_token(self, client_id: str, resource: str | None,
+                     scopes: list[str] | None = None) -> OAuthToken:
         now = int(time.time())
+        allowed = [s for s in (scopes or [SCOPE]) if s in (SCOPE, OFFLINE_SCOPE)]
+        if SCOPE not in allowed:
+            raise TokenError(error="invalid_scope", error_description="mcp scope required")
+        allowed = list(dict.fromkeys(allowed))
+        audience = resource or MCP_RESOURCE
+        if audience != MCP_RESOURCE:
+            raise TokenError(error="invalid_target", error_description="Unknown resource")
         value = self._seal("oa1", {
-            "client_id": client_id, "scopes": [SCOPE], "iat": now,
-            "exp": now + TOKEN_LIFETIME, "resource": resource or MCP_RESOURCE,
-            "subject": "omni-owner",
+            "client_id": client_id, "scopes": allowed, "iat": now,
+            "exp": now + TOKEN_LIFETIME, "resource": audience,
+            "subject": "omni-owner", "nonce": secrets.token_urlsafe(12),
+        })
+        # Signed, audience-bound refresh credentials work after Render sleep.
+        # They do not bypass the initial OAuth owner-consent flow.
+        renewal = self._seal("or1", {
+            "client_id": client_id, "scopes": allowed, "iat": now,
+            "exp": now + REFRESH_LIFETIME, "resource": audience,
+            "subject": "omni-owner", "nonce": secrets.token_urlsafe(18),
         })
         return OAuthToken(
-            access_token=value, token_type="Bearer",
-            expires_in=TOKEN_LIFETIME, scope=SCOPE,
+            access_token=value, refresh_token=renewal, token_type="Bearer",
+            expires_in=TOKEN_LIFETIME, scope=" ".join(allowed),
         )
 
     async def load_authorization_code(self, client: OAuthClientInformationFull, authorization_code: str) -> AuthorizationCode | None:
@@ -199,7 +229,7 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         original = self.codes.pop(authorization_code.code, None)
         if original is None or original.expires_at <= time.time() or original.client_id != client.client_id:
             raise TokenError(error="invalid_grant", error_description="Invalid/expired authorization code")
-        return self._issue_token(original.client_id, original.resource)
+        return self._issue_token(original.client_id, original.resource, original.scopes)
 
     async def load_access_token(self, token: str) -> AccessToken | None:
         payload = self._open(token, "oa1")
@@ -207,13 +237,16 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
             return None
         if payload["exp"] <= int(time.time()) or payload.get("resource") != MCP_RESOURCE:
             return None
-        if payload.get("scopes") != [SCOPE] or payload.get("subject") != "omni-owner":
+        scopes = payload.get("scopes")
+        if (not isinstance(scopes, list) or SCOPE not in scopes
+                or set(scopes) - {SCOPE, OFFLINE_SCOPE}
+                or payload.get("subject") != "omni-owner"):
             return None
         if not isinstance(payload.get("client_id"), str):
             return None
         try:
             return AccessToken(
-                token=token, client_id=payload["client_id"], scopes=[SCOPE],
+                token=token, client_id=payload["client_id"], scopes=scopes,
                 expires_at=payload["exp"], resource=MCP_RESOURCE,
                 subject="omni-owner", claims={"iss": BASE_URL},
             )
@@ -221,14 +254,50 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
             return None
 
     async def load_refresh_token(self, client: OAuthClientInformationFull, refresh_token: str) -> RefreshToken | None:
-        return None
+        payload = self._open(refresh_token, "or1")
+        if not payload or payload.get("client_id") != client.client_id:
+            return None
+        if payload.get("resource") != MCP_RESOURCE or payload.get("subject") != "omni-owner":
+            return None
+        expiry = payload.get("exp")
+        scopes = payload.get("scopes")
+        if (type(expiry) is not int or expiry <= int(time.time())
+                or not isinstance(scopes, list) or SCOPE not in scopes
+                or set(scopes) - {SCOPE, OFFLINE_SCOPE}
+                or not isinstance(payload.get("nonce"), str)):
+            return None
+        digest = hashlib.sha256(refresh_token.encode()).hexdigest()
+        if digest in self._spent_refresh:
+            return None
+        return RefreshToken(
+            token=refresh_token, client_id=client.client_id,
+            scopes=scopes, expires_at=expiry, resource=MCP_RESOURCE,
+            subject="omni-owner",
+        )
 
-    async def exchange_refresh_token(self, client: OAuthClientInformationFull, refresh_token: RefreshToken, scopes: list[str]) -> OAuthToken:
-        raise TokenError(error="invalid_grant", error_description="Refresh not supported; reconnect")
+    async def exchange_refresh_token(self, client: OAuthClientInformationFull,
+                                     refresh_token: RefreshToken, scopes: list[str]) -> OAuthToken:
+        if refresh_token.client_id != client.client_id or refresh_token.resource != MCP_RESOURCE:
+            raise TokenError(error="invalid_grant", error_description="Invalid refresh token")
+        if (SCOPE not in scopes or set(scopes) - set(refresh_token.scopes)):
+            raise TokenError(error="invalid_scope", error_description="Scope escalation forbidden")
+        checked = await self.load_refresh_token(client, refresh_token.token)
+        if checked is None:
+            raise TokenError(error="invalid_grant", error_description="Invalid or reused refresh token")
+        # Rotation is guaranteed only while this worker is alive. A durable
+        # revocation/rotation store is needed for strong multi-process semantics.
+        digest = hashlib.sha256(refresh_token.token.encode()).hexdigest()
+        self._spent_refresh[digest] = float(refresh_token.expires_at or 0)
+        if len(self._spent_refresh) > 512:
+            now = time.time()
+            self._spent_refresh = {k: exp for k, exp in self._spent_refresh.items() if exp > now}
+        return self._issue_token(client.client_id, refresh_token.resource, scopes)
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
-        # Stateless owner tokens are revoked globally by rotating OMNI_AGENT_ACCESS_TOKEN.
-        return None
+        # Signed credentials remain valid after restart; global revocation
+        # requires rotation of OMNI_AGENT_ACCESS_TOKEN on the server.
+        if isinstance(token, RefreshToken):
+            self._spent_refresh[hashlib.sha256(token.token.encode()).hexdigest()] = float(token.expires_at or 0)
 
     def _pending_ticket(self, ticket: str) -> Pending | None:
         pending = self.pending.get(ticket)
@@ -321,7 +390,7 @@ nunca ao ChatGPT. Não forneça a chave no chat.</p>
         code = AuthorizationCode(
             code=secrets.token_urlsafe(40),
             client_id=client.client_id,
-            scopes=[SCOPE],
+            scopes=list(dict.fromkeys([SCOPE] + [s for s in (auth.scopes or []) if s == OFFLINE_SCOPE])),
             expires_at=now + 180,
             code_challenge=auth.code_challenge,
             redirect_uri=auth.redirect_uri,

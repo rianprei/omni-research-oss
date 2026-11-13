@@ -168,6 +168,50 @@ class OwnerOAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await self.provider.get_client(cid + "corrupt"))
         self.assertIsNone(await self.provider.load_access_token(access.access_token + "corrupt"))
 
+    async def test_refresh_tokens_allow_reconnect_without_reapproval(self):
+        self.assertIn("refresh_token", self.client.grant_types)
+        self.assertIn("offline_access", self.client.scope)
+        initial = self.provider._issue_token(self.client.client_id, MCP_RESOURCE)
+        self.assertTrue(initial.refresh_token.startswith("or1."))
+        stored = await self.provider.load_refresh_token(self.client, initial.refresh_token)
+        self.assertEqual(stored.scopes, ["mcp"])
+        next_tokens = await self.provider.exchange_refresh_token(self.client, stored, ["mcp"])
+        self.assertNotEqual(initial.access_token, next_tokens.access_token)
+        self.assertNotEqual(initial.refresh_token, next_tokens.refresh_token)
+        self.assertIsNone(await self.provider.load_refresh_token(self.client, initial.refresh_token))
+        with self.assertRaises(Exception):
+            await self.provider.exchange_refresh_token(self.client, stored, ["mcp"])
+
+        # Signed tokens survive process restarts without retaining any secret
+        # in persistent files. The owner password remains server-side only.
+        restarted = OwnerOAuthProvider(PASSWORD)
+        registered = await restarted.get_client(self.client.client_id)
+        self.assertIsNotNone(registered)
+        self.assertIsNotNone(await restarted.load_refresh_token(registered, next_tokens.refresh_token))
+        self.assertIsNotNone(await restarted.load_access_token(next_tokens.access_token))
+
+    async def test_refresh_rejects_invalid_audience_client_scope_and_expiry(self):
+        initial = self.provider._issue_token(self.client.client_id, MCP_RESOURCE)
+        token = initial.refresh_token
+        wrong = self.client.model_copy(update={"client_id": "another-client"})
+        self.assertIsNone(await self.provider.load_refresh_token(wrong, token))
+        self.assertIsNone(await self.provider.load_refresh_token(self.client, token + "bad"))
+        previous = await self.provider.load_refresh_token(self.client, token)
+        with self.assertRaises(Exception):
+            await self.provider.exchange_refresh_token(self.client, previous, ["offline_access", "mcp"])
+        expired = self.provider._seal("or1", {
+            "client_id": self.client.client_id, "scopes": ["mcp"],
+            "iat": int(time.time()) - 2000, "exp": int(time.time()) - 10,
+            "resource": MCP_RESOURCE, "subject": "omni-owner", "nonce": "test",
+        })
+        self.assertIsNone(await self.provider.load_refresh_token(self.client, expired))
+        foreign = self.provider._seal("or1", {
+            "client_id": self.client.client_id, "scopes": ["mcp"],
+            "iat": int(time.time()), "exp": int(time.time()) + 600,
+            "resource": "https://attacker.example/mcp", "subject": "omni-owner", "nonce": "test",
+        })
+        self.assertIsNone(await self.provider.load_refresh_token(self.client, foreign))
+
     async def test_expired_ticket(self):
         uri = await self.provider.authorize(self.client, self.params)
         ticket = parse_qs(urlsplit(uri).query)["ticket"][0]
