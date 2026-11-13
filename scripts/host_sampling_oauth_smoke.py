@@ -131,7 +131,28 @@ def main():
         "redirect_uri":CALLBACK,"code_verifier":verifier,
         "resource":MCP},form=True)
     assert status==200,(status,raw)
-    token=js(raw)["access_token"]
+    credential=js(raw)
+    token=credential["access_token"]
+    refresh=credential.get("refresh_token")
+    assert isinstance(refresh,str) and refresh.startswith("or1."),credential.keys()
+    # Refresh without repeating browser authorization: first credential invalid
+    # after rotation within this worker, replacement survives process restarts.
+    status,_,raw=req(token_path,"POST",{
+        "grant_type":"refresh_token","refresh_token":refresh,
+        "client_id":client_id,"client_secret":client["client_secret"],
+        "scope":"mcp",
+    },form=True)
+    assert status==200,(status,raw)
+    newer=js(raw)
+    assert newer["access_token"]!=token and newer["refresh_token"]!=refresh,newer.keys()
+    token=newer["access_token"]
+    status,_,raw=req(token_path,"POST",{
+        "grant_type":"refresh_token","refresh_token":refresh,
+        "client_id":client_id,"client_secret":client["client_secret"],
+        "scope":"mcp",
+    },form=True)
+    assert status==400,(status,raw)
+    assert js(raw)["error"]=="invalid_grant",raw
     post_exchange, _, response=req(
         "/owner/approve", "POST", {"ticket":ticket,"password":OWNER}, form=True
     )
@@ -147,7 +168,7 @@ def main():
                    "list_agents","max_concurrent_subagents","task"},names
     print("OAUTH2_MCP_PASS",json.dumps({
         "oauth_metadata":True,"pkce_s256":True,"rfc9207_iss":rfc9207,"owner_approval":True,
-        "bearer_oauth":True,"tools":sorted(names),"model_calls":0,
+        "bearer_oauth":True,"refresh_token_rotation":True,"tools":sorted(names),"model_calls":0,
     }),flush=True)
 
 if __name__=="__main__":main()
