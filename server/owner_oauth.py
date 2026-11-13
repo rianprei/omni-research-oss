@@ -205,7 +205,7 @@ class OwnerOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         value = self._seal("oa1", {
             "client_id": client_id, "scopes": allowed, "iat": now,
             "exp": now + TOKEN_LIFETIME, "resource": audience,
-            "subject": "omni-owner",
+            "subject": "omni-owner", "nonce": secrets.token_urlsafe(12),
         })
         # Signed, audience-bound refresh credentials work after Render sleep.
         # They do not bypass the initial OAuth owner-consent flow.
