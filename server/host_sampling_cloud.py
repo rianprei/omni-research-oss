@@ -26,7 +26,7 @@ auth_settings = AuthSettings(
     resource_server_url=AnyHttpUrl(MCP_RESOURCE),
     required_scopes=["mcp"],
     client_registration_options=ClientRegistrationOptions(
-        enabled=True, valid_scopes=["mcp"], default_scopes=["mcp"]
+        enabled=True, valid_scopes=["mcp", "offline_access"], default_scopes=["mcp"]
     ),
     validate_token_resource=True,
 )
