@@ -12,6 +12,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 import host_sampling_core as runtime
+import host_agent_lifecycle as lifecycle
 from request_limits import RateLimitedApp
 from inbound_ip_filter import IngressAllowlist
 from owner_oauth import OwnerOAuthProvider, BASE_URL, MCP_RESOURCE
@@ -30,8 +31,8 @@ auth_settings = AuthSettings(
     validate_token_resource=True,
 )
 mcp = MCPServer(
-    "Omni Host Sampling (Experimental)", version="0.3.0",
-    instructions="OAuth-protected MCP. ChatGPT must connect via OAuth. Sampling requires client support.",
+    "Omni Host Sampling (Experimental)", version="0.4.0",
+    instructions="OAuth-protected MCP. Five agent-management tools; model inference requires MCP client sampling. These are not native ChatGPT agents.",
     auth=auth_settings, auth_server_provider=oauth_provider,
 )
 READ = ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=False)
@@ -40,7 +41,7 @@ SPAWN = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world
 @mcp.tool(name="agent", annotations=READ)
 async def agent(ctx: Context) -> dict:
     """Check whether the connected MCP client advertises sampling."""
-    return runtime.describe(ctx.session)
+    return dict(runtime.describe(ctx.session), configuration=lifecycle.configuration())
 
 @mcp.tool(name="spawn_agent", annotations=SPAWN)
 async def spawn_agent(prompt: str, ctx: Context, roles: list[str] | None = None,
@@ -50,7 +51,45 @@ async def spawn_agent(prompt: str, ctx: Context, roles: list[str] | None = None,
     Does NOT create native ChatGPT agents. Waits synchronously for sampling.
     Returns HOST_SAMPLING_UNSUPPORTED if the client cannot sample.
     """
-    return await runtime.spawn(ctx.session, ctx.request_id, prompt, roles, max_tokens, model_hint)
+    return await lifecycle.spawn_agents(ctx.session, ctx.request_id, prompt, roles, max_tokens, model_hint)
+
+
+@mcp.tool(name="send_message", annotations=SPAWN)
+async def send_message(agent_id: str, message: str, ctx: Context,
+                       max_tokens: StrictInt = 400, model_hint: str = "gpt-6") -> dict:
+    """Send a follow-up to a subagent's isolated transcript.
+
+    Performs a NEW, synchronous client-sampling request. No native ChatGPT
+    agent or background job is created; returns an explicit failure without
+    sampling capability.
+    """
+    return await lifecycle.send_message(ctx.session, ctx.request_id, agent_id,
+                                        message, max_tokens, model_hint)
+
+
+@mcp.tool(name="wait_agent", annotations=READ)
+async def wait_agent(agent_id: str, timeout_seconds: StrictInt = 0) -> dict:
+    """Read a subagent's latest result; optionally wait up to 20 seconds.
+
+    The model call is synchronous inside spawn_agent/send_message, so this
+    typically returns immediately. Records vanish on service restart.
+    """
+    return await lifecycle.wait_agent(agent_id, timeout_seconds)
+
+
+@mcp.tool(name="list_agents", annotations=READ)
+def list_agents(include_results: bool = False) -> dict:
+    """List process-local agent IDs, roles and statuses (max 32 retained)."""
+    return lifecycle.list_agents(include_results)
+
+
+@mcp.tool(name="max_concurrent_subagents", annotations=SPAWN)
+def max_concurrent_subagents(limit: StrictInt | None = None) -> dict:
+    """Get or set server-side parallel sampling limit (1-3; process-local).
+
+    Does not grant additional model capacity or override ChatGPT limitations.
+    """
+    return lifecycle.configuration(limit)
 
 @mcp.tool(name="task", annotations=READ)
 async def task(task_id: str) -> dict:

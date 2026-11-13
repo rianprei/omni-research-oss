@@ -143,7 +143,8 @@ def main():
     status,tools=mcp_call(token,"tools/list",12,{})
     assert status==200,(status,tools)
     names={x["name"] for x in tools["result"]["tools"]}
-    assert names=={"agent","spawn_agent","task"},names
+    assert names=={"agent","spawn_agent","send_message","wait_agent",\
+                   "list_agents","max_concurrent_subagents","task"},names
     print("OAUTH2_MCP_PASS",json.dumps({
         "oauth_metadata":True,"pkce_s256":True,"rfc9207_iss":rfc9207,"owner_approval":True,
         "bearer_oauth":True,"tools":sorted(names),"model_calls":0,
