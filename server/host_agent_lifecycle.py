@@ -1,6 +1,7 @@
-"""Process-local conversations for independent MCP client-sampling completions.
+"""Process-local conversations for independent MCP model completions.
 
-Each model call occurs inside a live MCP tools/call request. This never starts
+Model calls use client sampling or a configured server inference provider.
+Each occurs inside a live MCP tools/call request. This never starts
 an autonomous ChatGPT agent, and no data survives a process restart.
 """
 from __future__ import annotations
@@ -110,10 +111,11 @@ async def spawn_agents(session: Any, request_id: Any, prompt: str,
         raise ValueError("max_tokens must be an integer from 64 to 1024")
     if not isinstance(model_hint, str) or len(model_hint) > 48:
         raise ValueError("Invalid model hint")
-    if not sampling.capability(session):
+    if not sampling.available(session):
         return {"spawned": False, "agents_started": 0,
                 "error": "HOST_SAMPLING_UNSUPPORTED", "agent_ids": [],
-                "message": "MCP client did not advertise sampling; no model invoked."}
+                "server_provider_configured": False,
+                "message": "No MCP sampling and no inference provider configured; no model invoked."}
     groups, offset = [], 0
     while offset < len(chosen):
         with _lock:
@@ -154,9 +156,9 @@ async def send_message(session: Any, request_id: Any, agent_id: str, message: st
         raise ValueError("max_tokens must be an integer from 64 to 1024")
     if not isinstance(model_hint, str) or len(model_hint) > 48:
         raise ValueError("Invalid model hint")
-    if not sampling.capability(session):
+    if not sampling.available(session):
         return {"sent": False, "error": "HOST_SAMPLING_UNSUPPORTED",
-                "message": "No model invoked."}
+                "server_provider_configured": False, "message": "No model invoked."}
     with _lock:
         agent = _agents.get(agent_id)
         if agent is None:
