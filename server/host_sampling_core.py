@@ -7,6 +7,7 @@ from collections import OrderedDict
 from threading import RLock
 from typing import Any
 from mcp.types import ModelHint, ModelPreferences, SamplingMessage, TextContent
+import inference_provider as provider
 
 ROLES = {
     "researcher": "Independently analyze the research question. Flag unverified claims, do not invent citations.",
@@ -21,13 +22,20 @@ _lock = RLock()
 def capability(session: Any) -> bool:
     return getattr(getattr(session, "client_capabilities", None), "sampling", None) is not None
 
+def available(session: Any) -> bool:
+    return capability(session) or provider.configured()
+
 def describe(session: Any) -> dict:
     return {
         "client_sampling_declared": capability(session),
+        "server_inference_configured": provider.configured(),
+        "server_inference_model": provider.model_name(),
+        "available_backend": ("client_sampling" if capability(session) else
+                              "server_provider" if provider.configured() else "none"),
         "roles": list(ROLES),
         "maximum_agents": 3,
-        "backend": "MCP client sampling/createMessage",
-        "api_key_required": False,
+        "backend": "MCP client sampling or opt-in server inference provider",
+        "api_key_required": not capability(session) and bool(provider.configured()),
         "native_chatgpt_agent_creation": False,
         "model": "Client-controlled; model hint gpt-6 is not a guarantee",
         "protocol": "Legacy 2025-era server-to-client sampling; deprecated in MCP 2026-07-28",
@@ -53,11 +61,14 @@ async def spawn(session: Any, request_id: Any, prompt: str,
         raise ValueError("max_tokens must be an integer from 64 to 1024")
     if not isinstance(model_hint, str) or len(model_hint) > 48:
         raise ValueError("Invalid model hint")
-    if not capability(session):
+    if not available(session):
         return {"spawned": False, "error": "HOST_SAMPLING_UNSUPPORTED", "agents_started": 0,
-                "message": "Connected MCP client does not advertise sampling; no model invoked."}
+                "server_provider_configured": False,
+                "message": "No host sampling or server inference provider configured; no model invoked."}
 
     async def one(role: str) -> dict:
+        if not capability(session):
+            return await provider.generate(role, prompt.strip(), ROLES[role], max_tokens)
         try:
             result = await asyncio.wait_for(session.create_message(
                 messages=[SamplingMessage(role="user", content=TextContent(type="text", text=prompt.strip()))],
@@ -84,7 +95,9 @@ async def spawn(session: Any, request_id: Any, prompt: str,
         "agents_completed": sum(r["status"] == "completed" for r in results),
         "results": results,
         "created_at": time.time(),
-        "note": "The MCP client, not the server, selected the models; this did not create native ChatGPT agents.",
+        "note": ("The MCP client selected the model." if capability(session) else
+                 "The configured server-side provider generated responses.") +
+                " No native ChatGPT agents were created.",
     }
     with _lock:
         _records[record["task_id"]] = record
