@@ -114,12 +114,17 @@ app.router.routes.insert(0, Route(
 ))
 app.router.routes.insert(0, Route("/healthz", lambda req: JSONResponse(
     {"status": "ok", "sampling": "client-required", "auth": "OAuth2.1",
-     "ingress_feed": ingress.feed_status}), methods=["GET"]))
+     "ingress_feed": ingress.feed_status,
+     "ip_allowlist_enforced": ingress_enabled}), methods=["GET"]))
 app = RateLimitedApp(app, requests_per_minute=50, concurrency=6, max_bytes=16384)
 # OAuth discovery, client registration and the owner login must be PUBLICLY reachable.
-# Only /mcp ingress is filtered; MCP's own OAuth middleware verifies access tokens.
+# ChatGPT connector egress IPs change and may omit proxy-specific headers.
+# Keep the source-IP restriction opt-in; protected /mcp calls still require
+# OAuth access tokens and pass through RateLimitedApp even when IP filtering is off.
+ingress_enabled = os.getenv("OMNI_HOST_SAMPLING_ENFORCE_IP_ALLOWLIST", "0") == "1"
 ingress = IngressAllowlist(app)
-app = ingress
+if ingress_enabled:
+    app = ingress
 # RFC 9207 caused the live ChatGPT connector to stop before /authorize.
 # Compatibility default: use the previously observed callback-ID-specific flow.
 # Re-enable only after ChatGPT confirms stable-callback support for this plugin.
