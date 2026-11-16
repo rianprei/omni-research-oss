@@ -31,8 +31,8 @@ auth_settings = AuthSettings(
     validate_token_resource=True,
 )
 mcp = MCPServer(
-    "Omni Host Sampling (Experimental)", version="0.4.0",
-    instructions="OAuth-protected MCP. Five agent-management tools; model inference requires MCP client sampling. These are not native ChatGPT agents.",
+    "Omni Host Sampling (Experimental)", version="0.6.0",
+    instructions="OAuth-protected MCP. Five agent-management tools; model inference via client sampling or configured server provider. No native ChatGPT agents.",
     auth=auth_settings, auth_server_provider=oauth_provider,
 )
 READ = ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=False)
@@ -113,7 +113,8 @@ app.router.routes.insert(0, Route(
     "/owner/approve", oauth_provider.approve, methods=["POST"]
 ))
 app.router.routes.insert(0, Route("/healthz", lambda req: JSONResponse(
-    {"status": "ok", "sampling": "client-required", "auth": "OAuth2.1",
+    {"status": "ok", "sampling": "client-optional", "auth": "OAuth2.1",
+     "server_inference_configured": runtime.provider.configured(),
      "ingress_feed": ingress.feed_status,
      "ip_allowlist_enforced": ingress_enabled}), methods=["GET"]))
 app = RateLimitedApp(app, requests_per_minute=50, concurrency=6, max_bytes=16384)
