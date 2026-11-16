@@ -143,7 +143,7 @@ async def spawn_agents(session: Any, request_id: Any, prompt: str,
             "agents_requested": len(chosen), "agents_completed": completed,
             "status": "completed" if completed == len(chosen) else "partial_failure",
             "groups": groups,
-            "note": "Independent sampling completions; not native ChatGPT agents. All model calls finish within this request."}
+            "note": "Independent model completions; client sampling or configured server inference. Not native ChatGPT agents. All model calls finish within this request."}
 
 
 async def send_message(session: Any, request_id: Any, agent_id: str, message: str,
