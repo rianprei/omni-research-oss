@@ -1,6 +1,6 @@
 # OmniResearch OSS v1.4.0 — Unified Cloud
 
-> **Cloud provider reliability (2026-11-11):** Hosted `web_search` defaults to Wikimedia and Google News RSS because anonymous Bing HTML, DuckDuckGo, Mojeek and Reddit are unreliable or blocked from this Render region. Google News covers current news, **not** the complete web. Optional engines remain selectable and report errors when blocked. For general web discovery, the calling agent should fall back to its native web-search capability when available. Hosted PDF extraction uses pypdf, bounded to 2 MB input. This is not a zero-risk URL fetcher; additional DNS pinning and authentication are needed for sensitive production deployments.
+> **Cloud provider reliability (2026-11-11):** Hosted `omni_research-deep` defaults to Wikimedia and Google News RSS because anonymous Bing HTML, DuckDuckGo, Mojeek and Reddit are unreliable or blocked from this Render region. Google News covers current news, **not** the complete web. Optional engines remain selectable and report errors when blocked. For general web discovery, the calling agent should fall back to its native web-search capability when available. Hosted PDF extraction uses pypdf, bounded to 2 MB input. This is not a zero-risk URL fetcher; additional DNS pinning and authentication are needed for sensitive production deployments.
 
 
 [![CI](https://github.com/rianprei/omni-research-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/rianprei/omni-research-oss/actions/workflows/ci.yml)
@@ -23,11 +23,11 @@ The public MCP exposes **omni_research-deep** for all discovery: web, academic p
 | `server/engine.py` | Search, fetch, extract and evidence engine (Python standard library only) |
 | `skills/` | Six Agent Skills: `omni-research`, `deep-research`, `academic-research`, `code-research`, `source-audit`, `trend-intelligence` |
 | `render.yaml` | Render Blueprint for the free-tier cloud service |
-| `plugin.json` | Agent Plugins manifest (`omni-research-oss`, v1.3.0) |
+| `plugin.json` | Agent Plugins manifest (`omni-research-oss`, v1.4.0) |
 | `tests/` | Offline unit and integration tests |
 | `fixtures/` | Sample evidence fixture used by tests and demos |
 
-The cloud edition is **deployed and verified** at `https://omni-research-oss-mcp.onrender.com` (6 read-only tools). It is still **not** an approved or publicly listed plugin. See [PUBLIC_DEPLOYMENT.md](PUBLIC_DEPLOYMENT.md) and [Submission status](#cloud-submission-status).
+The cloud deployment is defined in `render.yaml`; verify its current health and tool inventory before connecting it. It is not an approved or publicly listed plugin. See [PUBLIC_DEPLOYMENT.md](PUBLIC_DEPLOYMENT.md) and [Submission status](#cloud-submission-status).
 
 ## Features
 
@@ -53,7 +53,7 @@ The cloud edition is **deployed and verified** at `https://omni-research-oss-mcp
 
 ## Installation
 
-### Local server (15 tools)
+### Local server (9 tools)
 
 Register the stdio server with any MCP client, for example Claude Code:
 
@@ -85,29 +85,23 @@ Each skill directory must contain `SKILL.md` at its root. Restart the agent sess
 
 Deploy the `render.yaml` Blueprint on a free Render instance, then point the Agent Plugins manifest at the verified HTTPS endpoint with `type: streamable-http`. Full procedure: [PUBLIC_DEPLOYMENT.md](PUBLIC_DEPLOYMENT.md).
 
-The deployed endpoint is `https://omni-research-oss-mcp.onrender.com`, and `mcp.json` in this repository points at it with `type: streamable-http`. The endpoint was verified before the file was created; the file only ever holds a URL that has actually answered. `scripts/deploy_render.sh` performs the whole sequence — create the service, wait for a live deploy, probe `/healthz` and the MCP endpoint, assert that exactly 6 public tools are exposed and none of the three local-only ones, and only then write `mcp.json`.
+`mcp.json` contains the configured remote research endpoint. It is not an installer for local stdio clients and does not configure the separate agent services. `scripts/deploy_render.sh` performs the whole sequence — create the service, wait for a live deploy, probe `/healthz` and the MCP endpoint, assert that exactly 6 public tools are exposed and none of the three local-only ones, and only then write `mcp.json`.
 
-## Available tools
+## Available research tools
 
-| MCP tool | Local | Cloud | Behavior |
+| MCP tool | Local stdio | Public cloud | Behavior |
 |---|:--:|:--:|---|
-| `web_search` | ✅ | ✅ | 4 default web engines, optional SearXNG, RRF, dedup |
-| `academic_search` | ✅ | ✅ | OpenAlex, Crossref, arXiv, PubMed |
-| `code_search` | ✅ | ✅ | GitHub repositories, issues, users; optional code auth |
-| `social_search` | ✅ | ✅ | Hacker News, Stack Overflow, public Reddit |
-| `news_search` | ✅ | ✅ | Google News RSS |
-| `dataset_search` | ✅ | ✅ | Hugging Face or Zenodo |
-| `fetch_source` | ✅ | ✅ | Extract public URLs; SSRF guard; optional PDF |
-| `map_website` | ✅ | ✅ | Bounded same-domain crawl |
-| `compare_evidence` | ✅ | ✅ | Return passages to audit, no auto-verdict |
-| `research_bundle` | ✅ | ✅ | Multi-provider parallel evidence pack |
-| `citation_lookup` | ✅ | ✅ | Crossref DOI metadata |
-| `health_check` | ✅ | ✅ | Configuration and capability report |
-| `read_document` | ✅ | ❌ | Local text, Office XML, optional PDF — **local only** |
-| `memory_save` | ✅ | ❌ | Save requested notes locally — **local only** |
-| `memory_search` | ✅ | ❌ | Search saved notes — **local only** |
+| `omni_research-deep` | ✅ | ✅ | Search web, academia, code, communities, news and datasets |
+| `fetch_source` | ✅ | ✅ | Extract public HTTP(S) pages and PDFs |
+| `map_website` | ✅ | ✅ | Bounded same-host crawl |
+| `compare_evidence` | ✅ | ✅ | Collect passages for review; no automatic verdict |
+| `citation_lookup` | ✅ | ✅ | Resolve DOI metadata through Crossref |
+| `health_check` | ✅ | ✅ | Report profile capabilities |
+| `read_document` | ✅ | ❌ | Read local files under `OMNI_ALLOWED_DIRS` |
+| `memory_save` | ✅ | ❌ | Save a local research note |
+| `memory_search` | ✅ | ❌ | Search local notes |
 
-The cloud edition intentionally withholds the three local-only tools: exposing them would let any visitor read files or shared notes. Restoring all 15 publicly requires OAuth-based per-user authorization and isolated per-user storage; that is **not** done in this candidate.
+The remote agent services are separate: `server.agent_cloud.py` provides three provider-backed tools, while `server.host_sampling_cloud.py` is an experimental sampling adapter. See [the client compatibility guide](docs/CLIENT_COMPATIBILITY.md) before installing a profile.
 
 ## Example questions
 
@@ -149,7 +143,7 @@ All tests are offline and use mock data. A successful offline test does **not** 
 
 Source code here is original and MIT-licensed; it **does not vendor** third-party source files. Links to 25 related projects and the precise coverage/gap classification are in `RESEARCH_MATRIX.md`. Verify third-party licenses before incorporating any future code.
 
-## Deep research integration (v1.3.0)
+## Deep research integration (v1.4.0)
 
 - Skill: `skills/deep-research/SKILL.md`, with valid YAML metadata and cross-references from `omni-research`.
 - Public reference instructions: `references/researcher.md` and `references/report-writer.md` under the new skill; the coordinator remains in `SKILL.md`.
@@ -165,9 +159,9 @@ For public distribution, researcher and writer reference documents were independ
 
 This package is a **candidate**, not an approved or published plugin.
 
-- The public service exposes 6 read-only research tools. The three local-only tools are withheld from the public service pending authenticated per-user isolation.
+- The public research profile exposes 6 read-only tools; the local profile exposes 9 tools. Agent services are separate.
 - The service uses a public web endpoint with HTTPS supplied by Render, and no third-party premium API key is required. Service traffic and LLM calls may still incur charges or free-tier limits.
-- `mcp.json` now carries the verified endpoint `https://omni-research-oss-mcp.onrender.com/mcp`. It was created only after the endpoint answered `/healthz` and returned exactly the 6 public tools.
+- `mcp.json` carries the configured remote research endpoint; check live service health before connecting it.
 - Some providers are scraped or rate-limited; sources can be inaccessible. The skill-based agent coordination relies on the host's support, it is not an embedded remote model.
 - Public listing must use the publisher's *verified* identity. This package intentionally omits unverified HTTPS website, support, privacy and terms URLs, a nonexistent demo recording URL and unconfirmed geographic/commerce declarations. The current `developerName` is the project's legacy label, **not proof of verified identity**.
 - There is no guarantee of a deployed Render service, review acceptance or publicly listed plugin at this stage.
