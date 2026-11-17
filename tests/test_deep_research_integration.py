@@ -24,7 +24,7 @@ def declared_versions():
 
     main = (ROOT / 'server' / 'main.py').read_text(encoding='utf-8')
     versions['server/main.py'] = re.search(
-        r"'serverInfo':\{'name':'omni-research-oss','version':'([^']+)'\}", main
+        r"""['"]serverInfo['"]\s*:\s*\{\s*['"]name['"]\s*:\s*['"]omni-research-oss['"]\s*,\s*['"]version['"]\s*:\s*['"]([^'"]+)['"]""", main
     ).group(1)
 
     engine = (ROOT / 'server' / 'engine.py').read_text(encoding='utf-8')
