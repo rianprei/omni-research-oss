@@ -31,8 +31,8 @@ auth_settings = AuthSettings(
     validate_token_resource=True,
 )
 mcp = MCPServer(
-    "Omni Host Sampling (Experimental)", version="0.6.0",
-    instructions="OAuth-protected MCP. Five agent-management tools; model inference via client sampling or configured server provider. No native ChatGPT agents.",
+    "Omni Host Sampling (Experimental)", version="0.7.0",
+    instructions="OAuth-protected MCP with multi_agent orchestration; inference via client sampling or configured server provider. No native ChatGPT agents.",
     auth=auth_settings, auth_server_provider=oauth_provider,
 )
 READ = ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=False)
@@ -52,6 +52,21 @@ async def spawn_agent(prompt: str, ctx: Context, roles: list[str] | None = None,
     Returns HOST_SAMPLING_UNSUPPORTED if the client cannot sample.
     """
     return await lifecycle.spawn_agents(ctx.session, ctx.request_id, prompt, roles, max_tokens, model_hint)
+
+
+@mcp.tool(name="multi_agent", annotations=SPAWN)
+async def multi_agent(prompt: str, ctx: Context, roles: list[str] | None = None,
+                      max_tokens: StrictInt = 400, model_hint: str = "gpt-6") -> dict:
+    """Orchestrate 1-3 independent role-specific model completions.
+
+    Run concurrently when capacity permits; return agent IDs, per-agent
+    results, model identifiers and explicit errors. Requires a real inference
+    backend (MCP client sampling or configured provider). Does NOT create
+    native ChatGPT agents or use a ChatGPT Plus subscription as an API.
+    """
+    return await lifecycle.multi_agent(
+        ctx.session, ctx.request_id, prompt, roles, max_tokens, model_hint
+    )
 
 
 @mcp.tool(name="send_message", annotations=SPAWN)
