@@ -146,6 +146,44 @@ async def spawn_agents(session: Any, request_id: Any, prompt: str,
             "note": "Independent model completions; client sampling or configured server inference. Not native ChatGPT agents. All model calls finish within this request."}
 
 
+async def multi_agent(session: Any, request_id: Any, prompt: str,
+                      roles: list[str] | None = None, max_tokens: int = 400,
+                      model_hint: str = "gpt-6") -> dict:
+    """Orchestrate up to three isolated role completions and return one report.
+
+    Uses the configured inference backend, not native ChatGPT subprocesses.
+    The call is synchronous; agent transcripts are process-local.
+    """
+    chosen = ["researcher", "critic", "planner"] if roles is None else roles
+    raw = await spawn_agents(session, request_id, prompt, roles, max_tokens, model_hint)
+    agents = [
+        agent for group in raw.get("groups", [])
+        for agent in group.get("agents", [])
+    ]
+    completed = sum(agent.get("status") == "completed" for agent in agents)
+    requested = len(chosen)
+    outcome = {
+        "orchestration": "multi_agent",
+        "executed": completed > 0,
+        "status": ("completed" if completed == requested else
+                   "partial_failure" if completed else "not_executed"),
+        "backend": sampling.describe(session)["available_backend"],
+        "native_chatgpt_agents": False,
+        "agents_requested": requested,
+        "agents_completed": completed,
+        "agent_ids": [a["agent_id"] for a in agents if "agent_id" in a],
+        "task_ids": raw.get("task_ids", []),
+        "agents": agents,
+        "note": ("Only completed model responses count as executed agents. "
+                 "This tool does not create native ChatGPT agents or use a Plus entitlement."),
+    }
+    if "error" in raw:
+        outcome["error"] = raw["error"]
+    elif not completed:
+        outcome["error"] = "ALL_AGENT_COMPLETIONS_FAILED"
+    return outcome
+
+
 async def send_message(session: Any, request_id: Any, agent_id: str, message: str,
                        max_tokens: int = 400, model_hint: str = "gpt-6") -> dict:
     if not isinstance(agent_id, str) or len(agent_id) != 32:
