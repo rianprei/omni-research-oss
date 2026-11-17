@@ -45,7 +45,7 @@ jobs:
           print("MCP initialize:",init.get("serverInfo"),init.get("protocolVersion"))
           tools=call("tools/list",2).get("tools",[])
           names={t["name"] for t in tools}
-          expected={"web_search","academic_search","code_search","social_search","news_search","dataset_search","fetch_source","map_website","compare_evidence","research_bundle","citation_lookup","health_check"}
+          expected={"omni_research-deep","fetch_source","map_website","compare_evidence","citation_lookup","health_check"}
           assert names==expected,(len(names), sorted(names), sorted(expected-names))
           print("MCP tool inventory:",len(names),sorted(names))
           PY
